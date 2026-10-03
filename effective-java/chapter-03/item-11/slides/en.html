@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 11 - Always override hashCode when you override equals</title>
+    <meta name="description" content="Always override hashCode when you override equals. PhoneNumber examples, real source code and tests." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="../../../../assets/logo.png" type="image/png" sizes="145x145" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1><p class="title-sub">Item 11<br /><strong>Always override hashCode when you override equals</strong></p><p class="sub">Chapter 3 · Methods common to all objects</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Book Club · Effective Java</span></div>
+          <aside class="notes">In Item 10, PhoneNumber gained value equality. Now we follow the consequence: its hash must agree with that equality. PhoneNumber remains the main example. We distinguish the mandatory contract from distribution, which affects collection costs.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">The path</div><h2>From contract to <em>distribution</em></h2><ol><li>The shortcut: constant hash</li><li>Equality and collection lookups</li><li>The PhoneNumber recipe</li><li>Objects.hash and boxing</li><li>Caching when it makes sense</li><li>Distribution and compatibility</li></ol>
+          <aside class="notes">Follow the notes: start with a hardcoded hash, clarify the equality rule, build the recipe, discuss convenience and caching, then return to distribution. The tests are small demonstrations without nanosecond measurements.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">The tempting shortcut</div><h2>A <em>constant</em> hash</h2><div class="box">It compiles. It can satisfy the contract.<br />But every instance receives the same hash.</div><p class="sub">A correct contract does not guarantee good distribution.</p>
+          <aside class="notes">Returning 42 does not cause an error by itself. Equal objects both return 42, so the required implication holds. The problem is that unequal objects also always receive 42. A constant hash does not make equals incorrect: it harms distribution.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Same equals; always 42</div>
+          <span class="filename">distribution/ConstantHashPhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumber.java" data-lines="16-24"></code></pre>
+          <aside class="notes">Equality delegates to the complete PhoneNumber. No significant field was removed from equals; only the hash is constant. Show both methods together.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: collisions still work</div>
+          <span class="filename">distribution/ConstantHashPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumberTest.java" data-lines="17-34"></code></pre>
+          <aside class="notes">The set stores two different numbers, finds an equivalent instance and rejects a logical duplicate. The map also finds the correct value. This proves semantics, not efficiency: there is no benchmark here.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>PhoneNumber(313, 414, 533)</h3><p class="sub">One value.</p></div><div class="col"><h3>PhoneNumber(314, 413, 533)</h3><p class="sub">Another value. Ideally, another hash.</p></div></div>
+          <aside class="notes">These are the numbers from the notes. We want to mitigate collisions, not promise different hashes for all unequal objects. An int has finitely many outcomes; collisions are allowed. The upcoming recipe gives different hashes for these two concrete examples.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">The fundamental rule</div><h1>Equal.</h1><p class="sub"><code>a.equals(b) == true</code><br />requires equal hashes.</p>
+          <aside class="notes">If a.equals(b) is true, a.hashCode() and b.hashCode() must agree. The converse is not required. Repeated calls must also keep the result while state used by equals remains unchanged; the number need not persist between application runs.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">THE CONSEQUENCE</div><h2>Equal, but <em>not found</em></h2><p class="goal">The collection uses hashCode before confirming with equals.</p>
+          <aside class="notes">HashMap uses the hash to select candidates; equals determines equality among candidates. If equal objects have inconsistent hashes, a lookup can fail. Even objects in the same bucket may have different full hashes and be rejected before equals.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Equality is correct; hashCode is missing</div>
+          <span class="filename">contract/PhoneNumberWithoutHashCode.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberWithoutHashCode.java" data-lines="25-31"></code></pre>
+          <aside class="notes">This class has PhoneNumber's three final fields and range validation. The displayed method is the class's last method: there is no hashCode override. The inherited implementation is still Object's.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: value equality, identity hash</div>
+          <span class="filename">contract/BrokenHashCodeTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/BrokenHashCodeTest.java" data-lines="15-24"></code></pre>
+          <aside class="notes">Do not require two instances to have different identity hashes: they can collide. This test shows that the hash is still identity based. The next example controls the hashes to demonstrate lookup failure reliably.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The failure with controlled hashes</div>
+          <span class="filename">contract/PhoneNumberBrokenHashCode.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberBrokenHashCode.java" data-lines="19-27"></code></pre>
+          <aside class="notes">Equality still delegates to the same number. The second constructor argument simulates distinct identity hashes; it is not logical state. This implementation is deliberately broken to make the demonstration reproducible.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: equality agrees, lookup fails</div>
+          <span class="filename">contract/BrokenHashCodeTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/BrokenHashCodeTest.java" data-lines="26-43"></code></pre>
+          <aside class="notes">Hashes 1 and 2 avoid dependence on JVM randomness. contains and get run on real collections; the test does not replace lookup with an equals scan. The instances are equal, yet the set can even accept both.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The fix: the same logical state</div>
+          <span class="filename">contract/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumber.java" data-lines="22-36"></code></pre>
+          <aside class="notes">The three fields used by equals also feed hashCode. Show both methods now; Short.hashCode and the multiplier 31 will be discussed next.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: the new instance is found</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="54-67"></code></pre>
+          <aside class="notes">With the contract corrected, HashSet and HashMap find a new instance with the same value. add also rejects the logical duplicate. This continues the practical consequence introduced in Item 10.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: equal values have equal hashes</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="15-25"></code></pre>
+          <aside class="notes">Distinct instances with equal values have equal hashes across repeated calls. This is the contract requirement, not an optional distribution property.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">The converse does not hold</div><h2>Same hash <em>does not imply equality</em></h2><div class="box">313, 414, 533<br />313, 413, 564<br /><strong>Different values. The same hash with this recipe.</strong></div>
+          <aside class="notes">Decreasing the prefix by 1 and increasing the line by 31 cancels their contributions in this formula. This is a valid collision. HashSet uses equals to keep the values separate. Do not teach hashCode as a unique identifier.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: both values survive the collision</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="39-52"></code></pre>
+          <aside class="notes">The test asserts equal hashes and unequal values, then verifies that the set stores both and retrieves one through an equivalent instance.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Object fields</div><h2>The same <em>notion of equality</em></h2><p class="lede">Use the hash of the object participating in equals.</p><p class="sub">If equality uses a canonical value, hashing must use it too.</p>
+          <aside class="notes">For an object field, use its corresponding hash; Objects.hashCode handles null if null is allowed. This example defines equality using stripped lowercase text with Locale.ROOT. Do not conflate this rule with equalsIgnoreCase over all Unicode.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">One canonical value for equals and hashCode</div>
+          <span class="filename">objects/CanonicalLabel.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/CanonicalLabel.java" data-lines="9-19"></code></pre>
+          <aside class="notes">The record constructor normalizes the component before storing it. Generated equals compares this canonical component; hashCode hashes the same String. No equality against a different type is introduced.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: variants find the same value</div>
+          <span class="filename">objects/CanonicalLabelTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/CanonicalLabelTest.java" data-lines="13-25"></code></pre>
+          <aside class="notes">Leading and trailing whitespace and letter case do not change the value under this class's rule. The test proves equality, equal hashing and HashSet lookup.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Primitive fields</div><h2>Type.hashCode(<em>field</em>)</h2><p class="lede">Short · Integer · Boolean</p><p class="sub">The static method accepts the corresponding primitive.</p>
+          <aside class="notes">Follow the book's idea: Short.hashCode(areaCode), Integer.hashCode(age), Boolean.hashCode(active). A static method owned by a wrapper class does not require boxing its argument.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: primitive hashes</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="13-23"></code></pre>
+          <aside class="notes">Compare actual API results. The static call accepts short, int or boolean; it does not require constructing a wrapper to call an instance method.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">THE BOOK'S RECIPE</div><h2>PhoneNumber and <em>31</em></h2><p class="goal">Combine all significant fields in a stable order.</p>
+          <aside class="notes">Return to the main PhoneNumber with three shorts. Term order affects distribution; it need not copy the comparison order in equals. The same rule must hold for equal instances.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Three fields; one combination</div>
+          <span class="filename">contract/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumber.java" data-lines="30-36"></code></pre>
+          <aside class="notes">Start with the area code hash, multiply by 31 before adding prefix and line. This order distinguishes the two numbers from the notes. Do not promise collision freedom.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: distribution for this concrete pair</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="27-37"></code></pre>
+          <aside class="notes">The different-hash assertion applies to these two values and this implementation. It is not a universal requirement for unequal objects. The assertion description records that distinction.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Why 31?</div><h2><em>Odd</em> and prime</h2><div class="cards"><div class="card"><span class="n">ODD</span><h3>Preserves bits</h3><p>Even multipliers can discard information through overflow.</p></div><div class="card"><span class="n">PRIME</span><h3>A tradition</h3><p>A useful choice with no magical distribution guarantee.</p></div><div class="card"><span class="n">31</span><h3>Simple</h3><p>Multiplication by 31 equals shifting by 5 and subtracting.</p></div></div>
+          <aside class="notes">Do not turn this into a mathematics lecture. In int arithmetic an even multiplier can lose the highest bit: multiplying by a power of two shifts bits. Choosing a prime is also traditional; primality does not guarantee a good hash. The shift equivalence does not mean we should handwrite the optimization.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: a bit lost by an even multiplier</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="54-61"></code></pre>
+          <aside class="notes">Integer.MIN_VALUE contains only the highest bit. Multiplication by 32 overflows to zero; multiplication by 31 preserves a distinction from zero. This narrow demonstration supports the book's explanation without claiming 31 solves every collision.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">The convenient alternative</div><h2>Objects.<em>hash</em></h2><p class="lede">Less code to combine the fields.</p><p class="sub">Convenience can have a cost: varargs, an array and boxing.</p>
+          <aside class="notes">Objects.hash(Object... values) receives objects. Calling it with primitives involves boxing and a varargs array. It can be slower, but do not promise a measured difference: the JIT may eliminate work and boxing may reuse wrappers. This alternative need not return the same number as the previous recipe, only respect its own equality.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The alternative from the notes</div>
+          <span class="filename">objects/PhoneNumberWithObjectsHash.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/PhoneNumberWithObjectsHash.java" data-lines="32-35"></code></pre>
+          <aside class="notes">Keep the example's order: line, prefix and area code. This order is also valid. Since equivalent instances have equal values in all three fields, they receive equal results.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: convenience preserves the contract</div>
+          <span class="filename">objects/PhoneNumberWithObjectsHashTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/PhoneNumberWithObjectsHashTest.java" data-lines="13-24"></code></pre>
+          <aside class="notes">The test checks equality, hashing and a real map lookup. It does not compare hashes from different classes: these examples do not define objects of different types as equal.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>Boxing</h3><p class="sub">boolean → Boolean<br />int → Integer</p></div><div class="col"><h3>Unboxing</h3><p class="sub">Boolean → boolean<br />Integer → int</p></div></div>
+          <aside class="notes">The directions are opposite. For Objects.hash, the key point is boxing primitives into Object[], together with the varargs array. Do not attribute this cost to unboxing.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: primitive to wrapper and back</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="25-39"></code></pre>
+          <aside class="notes">Assignments make the direction of each conversion visible. Integer and Boolean are reference types; int and boolean are primitives.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: the array of boxed values</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="41-52"></code></pre>
+          <aside class="notes">Objects.hash computes like Arrays.hashCode on the argument array. Show that shorts become Short values. This test proves functional equivalence and types, not allocation counts in an optimized JVM.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">CACHE WHEN IT MAKES SENSE</div><h2>Calculate once, <em>reuse</em></h2><p class="goal">Immutable state · expensive calculation · repeated calls</p>
+          <aside class="notes">First show the notes' caching pattern in PhoneNumber, but explain that three fields make the calculation cheap: the extra field and check probably do not pay off. Then use Document to show larger state requiring traversal.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The pattern: lazy caching</div>
+          <span class="filename">caching/CachedPhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumber.java" data-lines="37-48"></code></pre>
+          <aside class="notes">The counter is demonstration instrumentation only. Logical state has final fields; the derived cache does not participate in equality. We count calculations in sequential calls. This code does not promise only one calculation under concurrent calls.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: a nonzero hash is calculated once</div>
+          <span class="filename">caching/CachedPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumberTest.java" data-lines="11-23"></code></pre>
+          <aside class="notes">Before the first call, the counter is zero. After repeated calls, it remains one and all results agree. This proves reuse, not a performance advantage for PhoneNumber.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">The sentinel has a peculiarity</div><h2>What if the real hash is <em>zero</em>?</h2><div class="box">Zero also means “not calculated”.<br />The hash will be recalculated on later calls.</div><p class="sub">The value stays correct. The contract stays valid.</p>
+          <aside class="notes">A zero hash is permitted. This recipe produces zero for 0, 0, 0. The field remains zero after calculation, so the next call recalculates. This reduces caching benefit in this case but never changes equality or the returned hash.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: recalculating zero keeps the contract</div>
+          <span class="filename">caching/CachedPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumberTest.java" data-lines="25-35"></code></pre>
+          <aside class="notes">Two equal instances return zero; the first computes twice. This test demonstrates the peculiarity without inventing timing results.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">When state is larger</div><h2>An immutable <em>Document</em></h2><p class="lede">A thousand paragraphs. Many hash queries.</p><p class="sub">One traversal reused by subsequent calls.</p>
+          <aside class="notes">Document stores an immutable copy of the String list. The list hash considers its elements and their order. Even if Strings cache their own hashes, the list must be traversed to combine them. Counting traversals is deterministic evidence of avoided work, not a latency benchmark.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The same pattern, with a collection</div>
+          <span class="filename">caching/Document.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/Document.java" data-lines="24-33"></code></pre>
+          <aside class="notes">The cache reuses the complete list hash. Do not remove paragraphs from the hash to make calculation faster. Immutable logical state permits reusing the result.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: one traversal, one hundred reuses</div>
+          <span class="filename">caching/DocumentTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/DocumentTest.java" data-lines="14-30"></code></pre>
+          <aside class="notes">A thousand elements are traversed on the first call. The next hundred return the same value with the counter at one. An equivalent Document also produces the same hash. No System.nanoTime measurement is needed.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The condition: protect state</div>
+          <span class="filename">caching/Document.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/Document.java" data-lines="15-17"></code></pre>
+          <aside class="notes">List.copyOf detaches internal state from the mutable input list. Strings are already immutable. The caller therefore cannot change state after caching its hash. The counter and cache are derived state, not equality components.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: the external list may change</div>
+          <span class="filename">caching/DocumentTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/DocumentTest.java" data-lines="32-44"></code></pre>
+          <aside class="notes">Modifying the original list does not change Document. The test verifies equality with the original snapshot, the same hash and no new traversal.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Optimize without impoverishing</div><h2>Do not omit <em>significant</em> data</h2><div class="box">A cheaper hash can concentrate different values.<br />Consider all relevant logical state.</div>
+          <aside class="notes">Omitting a significant field can still satisfy the equal-object requirement but worsen distribution among different values. Do not conflate legality with quality. PhoneNumber considers all three fields; Document considers all paragraphs and their order.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: each field participates</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="69-84"></code></pre>
+          <aside class="notes">Individual changes to area code, prefix and line change equality and, for these examples, hashing. The assertion keeps the distinction between contract and distribution explicit.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>Good distribution</h3><ul><li>Bucket 0 · A</li><li>Bucket 1 · B</li><li>Bucket 2 · C</li></ul></div><div class="col"><h3>Constant hash</h3><ul><li>Same bucket · A, B, C</li><li>More candidates to compare</li><li>HashSet uses HashMap internally</li></ul></div></div>
+          <aside class="notes">This is a conceptual picture: the bucket is not simply the number returned by hashCode. HashMap spreads bits and considers table capacity. The next test illustrates OpenJDK's spreading for a table of sixteen slots; it does not inspect private storage or promise that algorithm as an API.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: one sample, one bucket versus sixteen</div>
+          <span class="filename">distribution/ConstantHashPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumberTest.java" data-lines="36-50"></code></pre>
+          <aside class="notes">The selected sixteen-number sample occupies sixteen buckets in this implementation model, versus one with a constant hash. This proves distribution for the sample, not universal uniformity or running times. The helper uses OpenJDK's spreading and mask.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Complexity in context</div><h2>Collisions <em>cost</em></h2><div class="box">Long chains can require linear searches.<br />Modern HashMap can use trees under specific conditions.</div><p class="sub">Mitigation is no license to use a poor hash.</p>
+          <aside class="notes">With list buckets, a bad operation can scan n entries and a sequence of n insertions can accumulate quadratic work. Since Java 8, tree bins mitigate some concentrations when table and bucket size conditions hold. With identical hashes, key ordering also matters: do not promise universal O(log n) for arbitrary keys. Details and source: https://github.com/openjdk/jdk25u/blob/master/src/java.base/share/classes/java/util/HashMap.java . The distribution test is not a benchmark of that complexity.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Historical context</div><h2><em>Induced</em> collisions</h2><p class="lede">External strings can concentrate work in a hash table.</p><p class="sub">An example of why distribution matters.</p>
+          <aside class="notes">There is a history of collision attacks in web applications: externally controlled inputs were chosen to collide and consume hash-table processing. CERT documented the issue in 2011: https://www.kb.cert.org/vuls/id/903934/ . Aa and BB are only a minimal demonstration of String collision, not an attack reproduction or a claim that every current Java application is vulnerable.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: different strings, equal hash</div>
+          <span class="filename">distribution/StringCollisionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/StringCollisionTest.java" data-lines="13-22"></code></pre>
+          <aside class="notes">Platform classes also allow collisions. The set keeps both Strings. This test proves only that behavior; the historical context is supported by the source in the notes.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Future compatibility</div><h2>Document the <em>contract</em></h2><p class="lede">Avoid promising your internal hashCode algorithm.</p><p class="sub">Integer and String already specify results in their APIs.</p>
+          <aside class="notes">If clients depend on a documented formula, changing implementation can break expectations. Integer documents its int value as its hash; String documents its formula. These show existing public commitments without inventing a historical breaking-change incident. For new classes, documenting equality and hash obligations preserves room to improve distribution. Sources: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html#hashCode() and https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html#hashCode() .</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Recap</div><h2>Item 11</h2><ul><li>Equal objects require equal hashes</li><li>Collisions are allowed; good distribution matters</li><li>Include significant state and the same canonical representation</li><li>Caching: immutability, cost and frequency</li></ul>
+          <aside class="notes">Close by returning to the central rule. IDEs can generate equals/hashCode together; AutoValue appeared in Item 10; records generate both when component equality fits. Tools reduce work, but we still check whether they model the class's intended equality. Contract source: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#hashCode() .</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">The central idea</div><h1>The pair.</h1><p class="sub">Overrode equals?<br />Override hashCode.</p><div class="byline"><span>IDE · AutoValue · records</span><span class="dot">/</span><span class="where"><a href="../../item-12/slides/en.html">Next: Item 12 · toString</a></span></div>
+          <aside class="notes">The takeaway is Item 11's title. Now continue the same example: PhoneNumber should also be understandable in logs and error messages. Open Item 12 through the link.</aside>
+        </section>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><a href="index.html">PT</a> · <b>EN</b></span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
+

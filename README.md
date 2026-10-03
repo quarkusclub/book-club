@@ -14,7 +14,7 @@ ones that are video-based rather than code-based.
 
 | Book | Sessions so far | |
 | --- | --- | --- |
-| Effective Java | 1 (Chapter 3, Item 10) | [`effective-java/README.md`](effective-java/README.md) |
+| Effective Java | 3 (Chapter 3, Items 10–12) | [`effective-java/README.md`](effective-java/README.md) |
 
 Each book's own `README.md` has the full, chapter-grouped session table; this one stays a
 one-line-per-book index so it doesn't need editing every week. The live, filterable version is
@@ -34,10 +34,12 @@ one-line-per-book index so it doesn't need editing every week. The live, filtera
     ├── README.md                 this book's session table, grouped by chapter
     ├── pom.xml                   aggregator, one module per item covered so far
     └── chapter-03/
-        └── item-10/
-            ├── slides/           index.html (PT) and en.html (EN)
-            ├── src/               the Quarkus + Java 25 module, main and test
-            └── pom.xml
+        ├── item-10/
+        │   ├── slides/           index.html (PT) and en.html (EN)
+        │   ├── src/              the Quarkus + Java 25 module, main and test
+        │   └── pom.xml
+        ├── item-11/               hashCode contract, distribution, and caching
+        └── item-12/               useful toString representations and format contracts
 ```
 
 Each book gets its own top-level directory (`effective-java/`, and whatever comes next), its own
