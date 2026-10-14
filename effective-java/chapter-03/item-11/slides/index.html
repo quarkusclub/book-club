@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 11 - Sempre sobrescreva hashCode ao sobrescrever equals</title>
+    <meta name="description" content="Sempre sobrescreva hashCode ao sobrescrever equals. Exemplos com PhoneNumber, código real e testes." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="../../../../assets/logo.png" type="image/png" sizes="145x145" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1><p class="title-sub">Item 11<br /><strong>Sempre sobrescreva hashCode ao sobrescrever equals</strong></p><p class="sub">Capítulo 3 · Métodos comuns a todos os objetos</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Book Club · Effective Java</span></div>
+          <aside class="notes">No Item 10, PhoneNumber ganhou igualdade por valor. Agora vamos acompanhar a consequência: o hash precisa concordar com essa igualdade. PhoneNumber continua sendo o exemplo principal. Vamos separar contrato, que é obrigatório, de distribuição, que afeta o custo das coleções.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">O caminho</div><h2>Do contrato à <em>distribuição</em></h2><ol><li>O atalho: hash constante</li><li>Igualdade e buscas em coleções</li><li>A receita do PhoneNumber</li><li>Objects.hash e boxing</li><li>Cache quando fizer sentido</li><li>Distribuição e compatibilidade</li></ol>
+          <aside class="notes">Seguir a linha das notas: começar pelo hash hardcoded, esclarecer a regra de igualdade, construir a receita, discutir conveniência e cache e voltar ao impacto da distribuição. Os testes são demonstrações pequenas, sem medir nanossegundos.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">O atalho tentador</div><h2>Um hash <em>constante</em></h2><div class="box">Compila. Pode cumprir o contrato.<br />Mas todas as instâncias recebem o mesmo hash.</div><p class="sub">Contrato correto não garante boa distribuição.</p>
+          <aside class="notes">Retornar 42 não causa um erro por si só. Se dois objetos são iguais, ambos retornam 42, portanto a implicação exigida pelo contrato é respeitada. O problema é que objetos diferentes também recebem sempre 42. Não dizer que o hash constante torna equals incorreto: ele prejudica a distribuição.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Mesmo equals; sempre 42</div>
+          <span class="filename">distribution/ConstantHashPhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumber.java" data-lines="16-24"></code></pre>
+          <aside class="notes">A classe delega a igualdade ao PhoneNumber completo. Nenhum campo significativo foi retirado do equals; apenas o hash é constante. Mostrar os dois métodos juntos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: colidir ainda funciona</div>
+          <span class="filename">distribution/ConstantHashPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumberTest.java" data-lines="17-34"></code></pre>
+          <aside class="notes">O conjunto guarda dois números diferentes, encontra uma instância equivalente e recusa uma duplicata lógica. O mapa também encontra o valor certo. Isso prova a semântica, não eficiência: não há benchmark aqui.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>PhoneNumber(313, 414, 533)</h3><p class="sub">Um valor.</p></div><div class="col"><h3>PhoneNumber(314, 413, 533)</h3><p class="sub">Outro valor. Idealmente, outro hash.</p></div></div>
+          <aside class="notes">Estes são os números das notas. Queremos mitigar colisões, não prometer que todo objeto diferente terá hash diferente. Um int tem um espaço finito de resultados; colisões são permitidas. A receita que veremos produz hashes diferentes para estes dois exemplos concretos.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">A regra fundamental</div><h1>Iguais.</h1><p class="sub"><code>a.equals(b) == true</code><br />exige hashes iguais.</p>
+          <aside class="notes">Se a.equals(b) é true, obrigatoriamente a.hashCode() e b.hashCode() concordam. O contrário não é obrigatório. Chamadas repetidas também precisam manter o resultado enquanto o estado usado pelo equals não mudar; não há obrigação de repetir o número entre execuções da aplicação.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">A CONSEQUÊNCIA</div><h2>Igual, mas <em>não encontrado</em></h2><p class="goal">A coleção usa hashCode antes de confirmar com equals.</p>
+          <aside class="notes">HashMap usa o hash para selecionar candidatos; equals resolve a igualdade entre candidatos. Se hashes de objetos iguais não concordam, uma busca pode falhar. Até objetos no mesmo bucket podem ter hashes completos diferentes e ser descartados antes do equals.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">O equals está correto; falta hashCode</div>
+          <span class="filename">contract/PhoneNumberWithoutHashCode.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberWithoutHashCode.java" data-lines="25-31"></code></pre>
+          <aside class="notes">Esta classe tem os três campos finais e a validação de faixas do PhoneNumber. O método exibido encerra a classe: não existe override de hashCode. A implementação herdada continua sendo a de Object.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: igualdade por valor, hash de identidade</div>
+          <span class="filename">contract/BrokenHashCodeTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/BrokenHashCodeTest.java" data-lines="15-24"></code></pre>
+          <aside class="notes">Não exigir que duas instâncias tenham hashes de identidade diferentes: elas podem colidir. O teste demonstra que o hash continua sendo o de identidade. Para provar a falha de busca de forma estável, o próximo exemplo controla os hashes.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">A falha com hashes controlados</div>
+          <span class="filename">contract/PhoneNumberBrokenHashCode.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberBrokenHashCode.java" data-lines="19-27"></code></pre>
+          <aside class="notes">A igualdade ainda delega ao mesmo número. O segundo argumento do construtor simula hashes de identidade distintos; não faz parte do estado lógico. Essa é uma implementação deliberadamente quebrada para garantir que a demonstração seja reproduzível.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: equals concorda, a busca falha</div>
+          <span class="filename">contract/BrokenHashCodeTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/BrokenHashCodeTest.java" data-lines="26-43"></code></pre>
+          <aside class="notes">Usar hashes 1 e 2 evita depender de sorte na JVM. contains e get são chamados nas coleções reais; o teste não substitui a busca por uma varredura usando equals. As duas instâncias são iguais, mas o conjunto pode até aceitar ambas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A correção: o mesmo estado lógico</div>
+          <span class="filename">contract/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumber.java" data-lines="22-36"></code></pre>
+          <aside class="notes">Os três campos usados por equals também alimentam hashCode. Mostrar o conjunto dos métodos agora; a receita com Short.hashCode e o multiplicador 31 será detalhada adiante.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a nova instância é encontrada</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="54-67"></code></pre>
+          <aside class="notes">Com o contrato corrigido, HashSet e HashMap encontram uma nova instância com o mesmo valor. add também recusa a duplicata lógica. É a mesma consequência prática que encerrava o Item 10.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: iguais têm o mesmo hash</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="15-25"></code></pre>
+          <aside class="notes">Objetos diferentes na memória, iguais por valor, com o mesmo hash em chamadas repetidas. Esta é a obrigação do contrato, e não uma propriedade opcional de distribuição.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">A volta não vale</div><h2>Mesmo hash <em>não implica igualdade</em></h2><div class="box">313, 414, 533<br />313, 413, 564<br /><strong>Valores diferentes. O mesmo hash nesta receita.</strong></div>
+          <aside class="notes">Reduzir o prefixo em 1 e aumentar a linha em 31 faz as contribuições se cancelarem nesta fórmula. Isso é uma colisão válida. HashSet usa equals para manter os dois valores separados. Não ensinar hashCode como identificador único.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: dois valores sobrevivem à colisão</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="39-52"></code></pre>
+          <aside class="notes">O teste afirma hash igual e equals diferente, depois verifica que o conjunto guarda ambos e consegue buscar um deles por uma instância equivalente.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Campos que são objetos</div><h2>A mesma <em>noção de igualdade</em></h2><p class="lede">Use o hash do objeto que participa do equals.</p><p class="sub">Se equals usa um valor canônico, hashCode também precisa usá-lo.</p>
+          <aside class="notes">Para um campo objeto, usar seu hash correspondente; se null for um valor permitido, Objects.hashCode trata esse caso. O exemplo define a igualdade por texto normalizado com strip e lowercase em Locale.ROOT. Não confundir essa regra com equalsIgnoreCase para todo Unicode.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Um valor canônico para equals e hashCode</div>
+          <span class="filename">objects/CanonicalLabel.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/CanonicalLabel.java" data-lines="9-19"></code></pre>
+          <aside class="notes">O construtor do record normaliza o componente antes de armazená-lo. O equals gerado compara esse componente canônico; hashCode chama o hash da mesma String. Nenhuma comparação com String de outro tipo é adicionada.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: variações encontram o mesmo valor</div>
+          <span class="filename">objects/CanonicalLabelTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/CanonicalLabelTest.java" data-lines="13-25"></code></pre>
+          <aside class="notes">Espaços nas pontas e caixa diferente não mudam o valor segundo a regra desta classe. O teste prova igualdade, hash igual e busca no HashSet.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Campos primitivos</div><h2>Type.hashCode(<em>campo</em>)</h2><p class="lede">Short · Integer · Boolean</p><p class="sub">O método estático recebe o primitivo correspondente.</p>
+          <aside class="notes">Seguir a ideia do livro: Short.hashCode(areaCode), Integer.hashCode(age), Boolean.hashCode(active). Usar a classe wrapper como dona do método estático não significa que o argumento precisa sofrer boxing.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: hashes de primitivos</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="13-23"></code></pre>
+          <aside class="notes">Comparar os resultados reais da API. A chamada estática recebe short, int ou boolean; não é equivalente a construir um wrapper para chamar um método de instância.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">A RECEITA DO LIVRO</div><h2>PhoneNumber e <em>31</em></h2><p class="goal">Combine todos os campos significativos, em uma ordem estável.</p>
+          <aside class="notes">Voltar ao PhoneNumber principal, com três shorts. A ordem dos termos afeta a distribuição; não é necessário copiar a ordem das comparações em equals. É necessário manter a mesma regra entre instâncias iguais.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Três campos; uma combinação</div>
+          <span class="filename">contract/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumber.java" data-lines="30-36"></code></pre>
+          <aside class="notes">Iniciar com o hash do código de área, multiplicar por 31 antes de adicionar prefixo e linha. Esta ordem distingue os dois números das notas. Não prometer ausência de colisões.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: distribuição neste par concreto</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="27-37"></code></pre>
+          <aside class="notes">A assertion de hashes diferentes vale para estes dois valores e para esta implementação. Não é um requisito universal para objetos diferentes. Isso fica registrado também na descrição da assertion.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Por que 31?</div><h2><em>Ímpar</em> e primo</h2><div class="cards"><div class="card"><span class="n">ÍMPAR</span><h3>Preserva bits</h3><p>Multiplicadores pares podem descartar informação com overflow.</p></div><div class="card"><span class="n">PRIMO</span><h3>Uma tradição</h3><p>Uma escolha útil, sem garantia mágica de distribuição.</p></div><div class="card"><span class="n">31</span><h3>Simples</h3><p>Multiplicar por 31 equivale a deslocar por 5 e subtrair.</p></div></div>
+          <aside class="notes">Não transformar em uma aula de matemática. Em aritmética int, um multiplicador par pode perder o bit mais alto: multiplicar por uma potência de dois equivale a deslocar bits. O fato de 31 ser primo também tem caráter tradicional; primo não garante um bom hash. A equivalência com deslocamento não significa que precisamos escrever a otimização manualmente.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: um bit perdido pelo multiplicador par</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="54-61"></code></pre>
+          <aside class="notes">Integer.MIN_VALUE contém apenas o bit mais alto. Multiplicá-lo por 32 produz zero por overflow; multiplicar por 31 mantém uma distinção em relação a zero. Essa demonstração estreita sustenta a explicação do livro, sem alegar que 31 resolve todas as colisões.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">A alternativa conveniente</div><h2>Objects.<em>hash</em></h2><p class="lede">Menos código para combinar os campos.</p><p class="sub">Conveniência pode ter custo: varargs, array e boxing.</p>
+          <aside class="notes">Objects.hash(Object... values) recebe objetos. A chamada com primitivos envolve boxing e um array de varargs. Pode ser mais lenta, mas não prometer uma diferença medida: o JIT pode eliminar trabalho e boxing pode reutilizar wrappers. Não precisamos que esta alternativa retorne o mesmo número da receita anterior, apenas que respeite seu próprio equals.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">A alternativa das notas</div>
+          <span class="filename">objects/PhoneNumberWithObjectsHash.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/PhoneNumberWithObjectsHash.java" data-lines="32-35"></code></pre>
+          <aside class="notes">Manter a ordem do exemplo: linha, prefixo e código de área. Essa ordem também é válida. Como os três campos são iguais em instâncias equivalentes, o resultado será igual nelas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a conveniência mantém o contrato</div>
+          <span class="filename">objects/PhoneNumberWithObjectsHashTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/PhoneNumberWithObjectsHashTest.java" data-lines="13-24"></code></pre>
+          <aside class="notes">O teste verifica a igualdade, o hash e uma busca real no mapa. Não compara hashes de classes diferentes: objetos de tipos diferentes não são definidos como iguais nestes exemplos.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>Boxing</h3><p class="sub">boolean → Boolean<br />int → Integer</p></div><div class="col"><h3>Unboxing</h3><p class="sub">Boolean → boolean<br />Integer → int</p></div></div>
+          <aside class="notes">As direções são opostas. No Objects.hash, o ponto principal é boxing dos primitivos para caber em Object[], junto com o array de varargs. Não atribuir esse custo ao unboxing.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: ida e volta entre primitivo e wrapper</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="25-39"></code></pre>
+          <aside class="notes">As atribuições tornam visível a direção de cada conversão. Integer e Boolean são tipos de referência; int e boolean são primitivos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: o array de valores com boxing</div>
+          <span class="filename">objects/HashIngredientsTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/objects/HashIngredientsTest.java" data-lines="41-52"></code></pre>
+          <aside class="notes">A API Objects.hash calcula como Arrays.hashCode sobre o array de argumentos. Mostrar que os shorts viram Short. Este teste demonstra a equivalência funcional e os tipos, não quantifica alocações em uma JVM otimizada.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">CACHE QUANDO FIZER SENTIDO</div><h2>Calcular uma vez, <em>reutilizar</em></h2><p class="goal">Estado imutável · cálculo caro · chamadas repetidas</p>
+          <aside class="notes">Mostrar primeiro o padrão de cache das notas no PhoneNumber, mas explicar que três campos tornam o cálculo barato: provavelmente não compensa o campo adicional e a verificação. Em seguida, usar Document para mostrar um estado maior que exige uma travessia.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">O padrão: cache preguiçoso</div>
+          <span class="filename">caching/CachedPhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumber.java" data-lines="37-48"></code></pre>
+          <aside class="notes">O contador é apenas instrumentação da demonstração. O estado lógico tem campos finais; o cache derivado não participa do equals. Medimos cálculos em chamadas sequenciais. Este código não promete que apenas uma thread fará o cálculo em chamadas concorrentes.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: o hash não zero é calculado uma vez</div>
+          <span class="filename">caching/CachedPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumberTest.java" data-lines="11-23"></code></pre>
+          <aside class="notes">Antes da primeira chamada, o contador é zero. Depois de várias chamadas, permanece um e todos os resultados concordam. Isso prova reutilização, não uma vantagem de performance para PhoneNumber.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">A sentinela tem uma peculiaridade</div><h2>E se o hash real for <em>zero</em>?</h2><div class="box">Zero também significa “não calculado”.<br />O hash será recalculado nas próximas chamadas.</div><p class="sub">O valor continua correto. O contrato continua válido.</p>
+          <aside class="notes">Não existe proibição de hash zero. Para 0, 0, 0, esta receita produz zero. O campo continua zero após calcular, então a próxima chamada recalcula. Isso reduz o benefício do cache nesse caso, mas nunca muda a igualdade ou o hash retornado.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: recalcular zero não quebra o contrato</div>
+          <span class="filename">caching/CachedPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/CachedPhoneNumberTest.java" data-lines="25-35"></code></pre>
+          <aside class="notes">Duas instâncias iguais retornam zero; a primeira calcula duas vezes. O teste demonstra a peculiaridade sem inventar um resultado de tempo.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Quando o estado é maior</div><h2>Um <em>Document</em> imutável</h2><p class="lede">Mil parágrafos. Muitas consultas ao hash.</p><p class="sub">Uma travessia reutilizada nas chamadas seguintes.</p>
+          <aside class="notes">O Document guarda uma cópia imutável da lista de Strings. O hash da lista considera seus elementos e a ordem. Mesmo que Strings possam ter seu próprio cache, a lista precisa ser percorrida para combinar esses hashes. Contar travessias é uma evidência determinística do trabalho evitado, não um benchmark de latência.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">O mesmo padrão, com uma coleção</div>
+          <span class="filename">caching/Document.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/Document.java" data-lines="24-33"></code></pre>
+          <aside class="notes">O cache reaproveita o hash da lista completa. Não retirar parágrafos do hash para acelerar o cálculo. Imutabilidade do estado lógico é o que permite reutilizar o resultado.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: uma travessia, cem reutilizações</div>
+          <span class="filename">caching/DocumentTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/DocumentTest.java" data-lines="14-30"></code></pre>
+          <aside class="notes">Mil elementos são percorridos na primeira chamada. As cem seguintes retornam o mesmo valor, com contador igual a um. Um Document equivalente também produz o mesmo hash. Nenhuma medição de System.nanoTime é necessária.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">A condição: proteger o estado</div>
+          <span class="filename">caching/Document.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/Document.java" data-lines="15-17"></code></pre>
+          <aside class="notes">List.copyOf desconecta a lista interna da lista mutável recebida. Strings já são imutáveis. Assim o chamador não consegue alterar o estado depois que o hash foi cacheado. O contador e o cache são derivados, não componentes de igualdade.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a lista externa pode mudar</div>
+          <span class="filename">caching/DocumentTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/caching/DocumentTest.java" data-lines="32-44"></code></pre>
+          <aside class="notes">Modificar a lista original não muda o Document. O teste verifica a igualdade com o snapshot original, o mesmo hash e a ausência de uma nova travessia.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Otimizar sem empobrecer</div><h2>Não omita dados <em>significativos</em></h2><div class="box">Um hash mais barato pode concentrar valores diferentes.<br />Considere todo o estado lógico relevante.</div>
+          <aside class="notes">Omitir um campo significativo pode ainda cumprir a obrigação de hashes iguais para objetos iguais, mas piora a distribuição entre objetos diferentes. Não confundir legalidade com qualidade. Nosso PhoneNumber considera os três campos; nosso Document considera todos os parágrafos e sua ordem.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: cada campo participa</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/contract/PhoneNumberTest.java" data-lines="69-84"></code></pre>
+          <aside class="notes">As mudanças isoladas em código de área, prefixo e linha mudam equals e, nesses exemplos, também o hash. A distinção entre contrato e distribuição continua explícita na assertion.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>Boa distribuição</h3><ul><li>Bucket 0 · A</li><li>Bucket 1 · B</li><li>Bucket 2 · C</li></ul></div><div class="col"><h3>Hash constante</h3><ul><li>Mesmo bucket · A, B, C</li><li>Mais candidatos para comparar</li><li>HashSet usa HashMap internamente</li></ul></div></div>
+          <aside class="notes">O desenho é conceitual: o bucket não é simplesmente o número retornado por hashCode. HashMap espalha bits e considera a capacidade da tabela. O teste seguinte ilustra o espalhamento do OpenJDK para uma tabela de 16 posições; não inspeciona a tabela privada nem promete esse algoritmo como API.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: uma amostra, um bucket versus dezesseis</div>
+          <span class="filename">distribution/ConstantHashPhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/ConstantHashPhoneNumberTest.java" data-lines="36-50"></code></pre>
+          <aside class="notes">O conjunto de 16 números escolhido ocupa 16 buckets no modelo desta implementação, contra um com hash constante. Isso prova a distribuição desta amostra, não uniformidade universal ou tempos de execução. A função auxiliar usa o espalhamento e a máscara do OpenJDK.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Complexidade com contexto</div><h2>Colisões <em>custam</em></h2><div class="box">Cadeias longas podem exigir buscas lineares.<br />HashMap moderno pode usar árvores em condições específicas.</div><p class="sub">Mitigação não é uma licença para usar um hash ruim.</p>
+          <aside class="notes">Com buckets em lista, uma operação ruim pode percorrer n entradas e uma sequência de n inserções pode somar trabalho quadrático. Desde Java 8, tree bins mitigam certas concentrações quando a tabela e o bucket atingem condições de tamanho. Para hashes idênticos, a capacidade de ordenar as chaves também importa: não prometer O(log n) universal para qualquer chave. Detalhes e fonte: https://github.com/openjdk/jdk25u/blob/master/src/java.base/share/classes/java/util/HashMap.java . Não usamos o teste de distribuição como benchmark dessa complexidade.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Um contexto histórico</div><h2>Colisões <em>provocadas</em></h2><p class="lede">Strings externas podem concentrar o trabalho de uma tabela.</p><p class="sub">Um exemplo de por que a distribuição importa.</p>
+          <aside class="notes">Há um contexto histórico de collision attacks em aplicações web: entradas controladas externamente eram escolhidas para gerar colisões e consumir processamento nas tabelas. O CERT documentou o problema em 2011: https://www.kb.cert.org/vuls/id/903934/ . Aa e BB são só uma demonstração mínima de colisão de Strings, não uma reprodução de ataque nem uma alegação de vulnerabilidade de toda aplicação Java atual.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: Strings diferentes, hash igual</div>
+          <span class="filename">distribution/StringCollisionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item11/distribution/StringCollisionTest.java" data-lines="13-22"></code></pre>
+          <aside class="notes">Colisão é permitida também nas classes da plataforma. O conjunto mantém as duas Strings. O teste comprova só esse comportamento, enquanto o contexto histórico está apoiado na fonte das notas.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Compatibilidade futura</div><h2>Documente o <em>contrato</em></h2><p class="lede">Evite prometer o algoritmo interno do seu hashCode.</p><p class="sub">Integer e String já especificam resultados na API.</p>
+          <aside class="notes">Se os clients passam a depender de uma fórmula documentada, mudar a implementação pode quebrar expectativas. Integer documenta o próprio valor int como hash; String documenta sua fórmula. Esses exemplos mostram compromissos públicos já existentes, sem inventar um episódio histórico de quebra. Para novas classes, documentar a igualdade e as obrigações de hash preserva espaço para melhorar distribuição. Fontes: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html#hashCode() e https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/String.html#hashCode() .</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Recapitulando</div><h2>Item 11</h2><ul><li>Objetos iguais precisam de hashes iguais</li><li>Colisões são permitidas; boa distribuição importa</li><li>Inclua o estado significativo e a mesma representação canônica</li><li>Cache: imutabilidade, custo e frequência</li></ul>
+          <aside class="notes">Fechar retomando a regra central. IDEs ajudam a gerar o par equals/hashCode; AutoValue já apareceu no Item 10; records geram ambos quando a igualdade pelos componentes faz sentido. Ferramentas reduzem trabalho, mas precisamos conferir se representam a igualdade correta para a classe. Fonte do contrato: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#hashCode() .</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">A ideia central</div><h1>O par.</h1><p class="sub">Sobrescreveu equals?<br />Sobrescreva hashCode.</p><div class="byline"><span>IDE · AutoValue · records</span><span class="dot">/</span><span class="where"><a href="../../item-12/slides/index.html">Próximo: Item 12 · toString</a></span></div>
+          <aside class="notes">A frase para levar é a do título do Item 11. Agora seguir a continuidade: PhoneNumber também precisa ser compreensível quando aparece em um log ou mensagem de erro. Abrir o Item 12 pelo link.</aside>
+        </section>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><b>PT</b> · <a href="en.html">EN</a></span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
+

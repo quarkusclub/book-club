@@ -16,5 +16,7 @@
 
     <modules>
         <module>chapter-03/item-10</module>
+        <module>chapter-03/item-11</module>
+        <module>chapter-03/item-12</module>
     </modules>
 </project>

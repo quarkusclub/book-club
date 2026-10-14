@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 12 - Always override toString</title>
+    <meta name="description" content="Always override toString. PhoneNumber examples, real source code and tests." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="../../../../assets/logo.png" type="image/png" sizes="145x145" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1><p class="title-sub">Item 12<br /><strong>Always override toString</strong></p><p class="sub">Chapter 3 · Methods common to all objects</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Book Club · Effective Java</span></div>
+          <aside class="notes">Continue the sequence: Item 10 defines equality, Item 11 makes hashCode agree, Item 12 makes PhoneNumber readable. The title is the book's title; the conclusion will be precise about which classes benefit from a textual representation.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">The path</div><h2>From object to <em>useful text</em></h2><ol><li>The problem in logs and debugging</li><li>Implicit use of toString</li><li>PhoneNumber: specified format</li><li>Potion: open format</li><li>State access without parsing</li><li>Generated text and domain text</li></ol>
+          <aside class="notes">Preserve the notes' reasoning: why toString helps debugging, where it appears automatically, the effect of documenting its format, why programmatic access matters and how to evaluate generated implementations.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">The problem</div><h2>Which phone number <em>failed</em>?</h2><p class="lede">Logs · error messages · debugging</p><p class="sub">A useful representation makes state quick to inspect.</p>
+          <aside class="notes">toString is one of the most useful methods for debugging. A Failed to connect to message followed by an object should help identify the number in use. We will compare the same logical state through small examples.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">The inherited implementation</div><h2>ClassName@<em>hexHash</em></h2><div class="box">Class name + hexadecimal hash.<br />Little information about the phone's value.</div><p class="sub">It is not a description of the fields.</p>
+          <aside class="notes">Object.toString uses getClass().getName(), @ and Integer.toHexString(hashCode()). Do not describe this as necessarily a memory address or identity hash: this class already overrides hashCode. The text still does not describe its three fields. Source: https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Object.html#toString() .</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The phone still lacks a useful toString</div>
+          <span class="filename">representation/PhoneNumberWithoutToString.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/PhoneNumberWithoutToString.java" data-lines="5-22"></code></pre>
+          <aside class="notes">The class already delegates equals and hashCode to its number. Without a toString override, its output is still inherited from Object. No business application is needed for the demonstration.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: inherited text does not show the number</div>
+          <span class="filename">representation/PhoneNumberWithoutToStringTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/PhoneNumberWithoutToStringTest.java" data-lines="11-22"></code></pre>
+          <aside class="notes">The test computes Object.toString's exact form for this instance without hardcoding its hash. Concatenation includes the same text. The formatted phone number does not appear.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">The same state, readable</div><h1>313-414-0533</h1><p class="sub">The text reveals the number.<br />The message becomes useful.</p>
+          <aside class="notes">PhoneNumber should show relevant information for reading: area code, prefix and line. Line number 533 occupies four positions and becomes 0533. This representation is more natural for the domain than an enumeration of field names.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The book's representation</div>
+          <span class="filename">format/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumber.java" data-lines="57-61"></code></pre>
+          <aside class="notes">We use three validated short fields with widths 3, 3 and 4. Locale.ROOT keeps the documented representation independent of the machine's formatting locale. This is the book's example with that detail added for predictable digits.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: the exact result</div>
+          <span class="filename">format/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumberTest.java" data-lines="13-19"></code></pre>
+          <aside class="notes">Here an assertion of the complete text is appropriate because the format is specified. It demonstrates exactly 313-414-0533 and twelve characters.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Zeros are part of the format</div><h2>3, 14, 123 → <em>003-014-0123</em></h2><p class="sub">Fixed widths: three, three and four digits.</p>
+          <aside class="notes">The zero in the format specifier requests leading-zero padding. The constructor rejects negatives and values exceeding the accepted widths, preventing invalid numbers from lengthening the representation. Zero is allowed in this teaching example. We are not validating real telephone numbering rules.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: padding and valid boundaries</div>
+          <span class="filename">format/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumberTest.java" data-lines="21-27"></code></pre>
+          <aside class="notes">Show the notes' 123 → 0123 example and the zero and maximum boundaries of each field. Values fit in short; validation accepts int before casting.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">IMPLICIT USE</div><h2>You already call <em>toString</em></h2><p class="goal">String concatenation · println(Object) · %s</p>
+          <aside class="notes">These operations do not require explicitly writing object.toString(). String concatenation uses the representation, as does println(Object). For this example, which does not implement Formattable, String.format and printf with %s use toString. Do not generalize to %d or every format conversion.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: concatenation in an error message</div>
+          <span class="filename">representation/ImplicitToStringTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/ImplicitToStringTest.java" data-lines="15-22"></code></pre>
+          <aside class="notes">Keep the notes' message: Failed to connect to followed by phoneNumber. The representation appears automatically and identifies the number.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: System.out.println(Object)</div>
+          <span class="filename">representation/ImplicitToStringTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/ImplicitToStringTest.java" data-lines="24-39"></code></pre>
+          <aside class="notes">The test captures System.out, runs println with the object and restores output in finally. The assertion includes the platform line separator. This is real behavior, not a string assembled to imitate println.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: String.format with %s</div>
+          <span class="filename">representation/ImplicitToStringTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/ImplicitToStringTest.java" data-lines="41-48"></code></pre>
+          <aside class="notes">%s is the appropriate conversion for this demonstration. The phone does not implement Formattable, so formatting uses its toString.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: printf with %s</div>
+          <span class="filename">representation/ImplicitToStringTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/representation/ImplicitToStringTest.java" data-lines="50-61"></code></pre>
+          <aside class="notes">PrintStream is the same type as System.out. We capture bytes in a local stream to prove printf without changing global output again. %n adds the platform line separator.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">A public decision</div><h2>A specified format becomes a <em>commitment</em></h2><div class="box">If documentation promises “XXX-YYY-ZZZZ”,<br />consumers may depend on that format.</div><p class="sub">Changing it later can break clients.</p>
+          <aside class="notes">Documenting an exact format is an API choice. Programmers may use it in files, messages or conversions, so later changes can break them. Specified formats are not prohibited; this is the consequence of choosing one. PhoneNumber's documentation accepts that commitment.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">The contract is in the documentation</div>
+          <span class="filename">format/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumber.java" data-lines="52-61"></code></pre>
+          <aside class="notes">Javadoc is necessary here: format, widths and padding form a public contract not apparent from the method name. The promise is intentional.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>PhoneNumber</h3><p class="sub">Specified format.<br />“XXX-YYY-ZZZZ”</p></div><div class="col"><h3>Potion</h3><p class="sub">Useful description.<br />Exact format subject to change.</p></div></div>
+          <aside class="notes">This is the notes' central distinction. PhoneNumber promises its format. Potion explicitly leaves exact details unspecified and subject to change while giving a typical example. This preserves room to evolve its representation while keeping relevant information for humans.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Potion: a typical example without freezing the format</div>
+          <span class="filename">format/Potion.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/Potion.java" data-lines="13-22"></code></pre>
+          <aside class="notes">Keep Potion #9 with type love, smell turpentine and look india ink. Javadoc says the format may change. A record provides simple component accessors; its representation is explicitly chosen.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: useful information without fixed punctuation</div>
+          <span class="filename">format/PotionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PotionTest.java" data-lines="11-17"></code></pre>
+          <aside class="notes">The test checks relevant data without requiring the whole string with brackets, labels and commas. Values are distinct in this example. Punctuation is not documented as a contract.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">PROGRAMMATIC ACCESS</div><h2>State without <em>parsing</em></h2><p class="goal">If data matters to code, provide an accessor.</p>
+          <aside class="notes">Do not force clients to call toString and then substring to recover an area code. The larger problems are format coupling, fragility and difficulty evolving the representation. Parsing cost can be secondary, but is not the main argument. Even with a specified format, accessors provide a direct typed API.</aside>
+        </section>
+
+        <section class="code">
+          <div class="kicker">Accessors for numeric values</div>
+          <span class="filename">format/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumber.java" data-lines="40-50"></code></pre>
+          <aside class="notes">Accessors expose shorts, not substrings of the representation. lineNumber remains the numeric value 533; the extra zero belongs only to the text.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: numeric state independent of text</div>
+          <span class="filename">format/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PhoneNumberTest.java" data-lines="29-39"></code></pre>
+          <aside class="notes">Retrieving the three components directly and reconstructing an equivalent instance shows continuity with equals and hashCode. No parsing is involved.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: Potion also offers direct access</div>
+          <span class="filename">format/PotionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/format/PotionTest.java" data-lines="19-28"></code></pre>
+          <aside class="notes">The description format can change without changing access to number, type, smell and look. Consumer code should use these operations to retrieve state.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">TOOLS HELP</div><h2>Generated and <em>useful</em></h2><p class="goal">Evaluate whether the representation fits the object's meaning.</p>
+          <aside class="notes">Do not say generated toString is always inappropriate. IDEs, AutoValue and records can produce implementations much better than Object.toString. Ask whether listing fields is the best representation of this object. For a phone number, the natural format may be better.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A record generates a component representation</div>
+          <span class="filename">generated/PhoneNumberRecord.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/generated/PhoneNumberRecord.java" data-lines="1-16"></code></pre>
+          <aside class="notes">No toString method is written in this record. The compiler generates a representation with the record name and components. Validation keeps the same phone ranges.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: generated text is informative</div>
+          <span class="filename">generated/PhoneNumberRecordTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/generated/PhoneNumberRecordTest.java" data-lines="12-20"></code></pre>
+          <aside class="notes">The text includes areaCode, prefix and lineNumber and their values. The test does not freeze all punctuation in generated output; it checks the useful content of the example.</aside>
+        </section>
+
+        <section>
+          <div class="duo"><div class="col"><h3>Generated representation</h3><p class="sub">PhoneNumberRecord[<br />areaCode=313,<br />prefix=414,<br />lineNumber=533]</p></div><div class="col"><h3>Domain representation</h3><p class="sub">313-414-0533<br /><br />Both help. This one is more natural for a phone number.</p></div></div>
+          <aside class="notes">Preserve the notes' comparison. Both texts help debugging. The domain version presents a phone number as people normally recognize it. Customizing toString does not require abandoning records: an explicit implementation can also be written in a record, as with Potion.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">The test: the same components, another reading</div>
+          <span class="filename">generated/PhoneNumberRecordTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item12/generated/PhoneNumberRecordTest.java" data-lines="22-31"></code></pre>
+          <aside class="notes">The test transfers the record's components into PhoneNumber and proves both representations. No artificial generation system or parallel application is added.</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Recap</div><h2>Item 12</h2><ul><li>Concise text with relevant information</li><li>Concatenation, println and %s use the representation</li><li>A specified format is a public promise</li><li>Provide state access without parsing</li><li>Evaluate the meaning of generated text</li></ul>
+          <aside class="notes">The recommendation is to override toString in instantiable classes with a useful textual representation, especially value objects and objects often observed in logs or debugging. Do not turn it into a literal obligation for every instantiable class or ignore an adequate inherited representation.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">The central idea</div><h1>Useful text.</h1><p class="sub">Understand the object<br />without guessing its state.</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Items 10 → 11 → 12 · equals → hashCode → toString</span></div>
+          <aside class="notes">Close PhoneNumber's sequence: logical equality, compatible hashing and useful representation. Code and tests are in the Item 12 module and can be run live. Invite questions.</aside>
+        </section>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><a href="index.html">PT</a> · <b>EN</b></span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
+
