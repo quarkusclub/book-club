@@ -1,0 +1,12 @@
+import java.util.ArrayList;
+import java.util.List;
+
+class FinalRepair implements Cloneable {
+    private final List<String> labels = new ArrayList<>();
+
+    Object copy() throws CloneNotSupportedException {
+        FinalRepair copy = (FinalRepair) super.clone();
+        copy.labels = new ArrayList<>(labels);
+        return copy;
+    }
+}

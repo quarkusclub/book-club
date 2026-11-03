@@ -12,6 +12,7 @@ Portuguese, with a Quarkus module and a bilingual reveal.js deck proving every c
 | 10 | The `equals()` contract | [PT](chapter-03/item-10/slides/index.html) · [EN](chapter-03/item-10/slides/en.html) | [item-10](chapter-03/item-10/) |
 | 11 | Always override `hashCode` when you override `equals` | [PT](chapter-03/item-11/slides/index.html) · [EN](chapter-03/item-11/slides/en.html) | [item-11](chapter-03/item-11/) |
 | 12 | Always override `toString` | [PT](chapter-03/item-12/slides/index.html) · [EN](chapter-03/item-12/slides/en.html) | [item-12](chapter-03/item-12/) |
+| 13 | Override `clone` judiciously | [PT](chapter-03/item-13/slides/index.html) · [EN](chapter-03/item-13/slides/en.html) | [item-13](chapter-03/item-13/) |
 
 ## Building
 

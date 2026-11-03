@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 13 - Sobrescreva clone com cuidado</title>
+    <meta name="description" content="Clonagem, referências mutáveis e alternativas de cópia, com código real e testes." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="../../../../assets/logo.png" type="image/png" sizes="145x145" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1><p class="title-sub">Item 13<br /><strong>Sobrescreva clone com cuidado</strong></p><p class="sub">Capítulo 3 · Métodos comuns a todos os objetos</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Book Club · Effective Java</span></div>
+          <aside class="notes">Abra com a pergunta: se Java já tem clone, por que precisamos de cuidado? Siga os exemplos do Item 13: PhoneNumber, Stack e HashTable. O item foi consultado no PDF fornecido. O objetivo é entender o mecanismo, a independência necessária e as alternativas.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">O caminho</div><h2>O que significa <em>copiar</em>?</h2><ol><li>Cloneable e o contrato de clone</li><li>PhoneNumber e herança</li><li>Stack: array e elementos</li><li>HashTable: cadeias de nós</li><li>Cuidados na implementação</li><li>Construtores e factories de cópia</li></ol>
+          <aside class="notes">Avance do caso simples para as referências mutáveis. Cada conceito é acompanhado pelo código real e pelo teste que demonstra seu comportamento.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Mixin e marcador</div><h2>Cloneable não declara <em>clone</em></h2><div class="duo"><div class="col"><h3>Mixin</h3><p class="sub">Acrescenta uma capacidade.<br />Comparable permite comparar.</p></div><div class="col"><h3>Cloneable</h3><p class="sub">Zero métodos.<br />Object.clone continua protected.</p></div></div><p class="sub">Implementar o marcador não publica uma operação de cópia.</p>
+          <aside class="notes">Relacionar ao Item 20. Uma mixin acrescenta uma capacidade sem exigir uma superclasse específica; não precisa de métodos default. Describable expõe describe pelo tipo da interface. Cloneable autoriza a cópia de Object.clone, mas não declara o método. protected não permite invocá-lo em qualquer receptor só porque toda classe herda Object. Reflection pode localizar o método sem ter acesso para invocá-lo.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Uma interface com operação e um marcador</div>
+          <span class="filename">contract/CloneableDemo.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemo.java" data-lines="4-6"></code></pre>
+          <span class="filename">contract/CloneableDemo.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemo.java" data-lines="8-9"></code></pre>
+          <aside class="notes">Compare as declarações. O cliente pode chamar describe por Describable. Apenas implementar Cloneable não oferece uma chamada pública a clone.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: capacidade e acessibilidade</div>
+          <span class="filename">contract/CloneableDemoTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemoTest.java" data-lines="25-30"></code></pre>
+          <span class="filename">contract/CloneableDemoTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemoTest.java" data-lines="34-41"></code></pre>
+          <aside class="notes">O marcador não declara métodos; getMethod não encontra clone público. getDeclaredMethod encontra Object.clone, mas invoke lança IllegalAccessException. O teste protectedCloneDoesNotCompile também verifica com o javac a chamada inválida do cliente. No Java 25, módulos condicionam trySetAccessible; sem abertura de java.base/java.lang normalmente retorna false.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">O contrato</div><h2>Três <em>convenções</em></h2><p class="lede">x.clone() != x</p><p class="lede">x.clone().getClass() == x.getClass()</p><p class="lede">x.clone().equals(x)</p><p class="sub">Outra instância · mesmo tipo · igualdade depende de equals</p>
+          <aside class="notes">São expectativas gerais para sobrescritas, não exigências absolutas nem pós-condições verificadas pelo compilador. O algoritmo específico de Object.clone, quando aceita o receptor, cria outra instância da classe concreta. Com Object.equals, objetos distintos não são iguais. PhoneNumber define igualdade por componentes; Stack herda igualdade por identidade.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: equals pode comparar identidade</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/PhoneNumberTest.java" data-lines="28-32"></code></pre>
+          <aside class="notes">Reutilizamos Stack para mostrar Object.equals sem criar outra classe. O clone é outra instância e não é igual ao original nesse modelo de igualdade.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">O caso simples</div><h2>PhoneNumber: mesmos valores,<br /><em>outra instância</em></h2><p class="lede">Object.clone copia os campos, sem executar construtores.</p><p class="sub">Primitivos: valores copiados.<br />Referências: os mesmos objetos.</p>
+          <aside class="notes">PhoneNumber tem apenas campos primitivos. A cópia campo a campo já preserva seu estado. O retorno covariante PhoneNumber evita cast no cliente. Construtores e inicializadores de instância não são executados; static não vira estado separado e transient não altera a cópia. A classe é imutável e só implementa clone aqui para estudar o mecanismo: novos valores imutáveis normalmente podem ser compartilhados.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Retorno covariante e super.clone</div>
+          <span class="filename">contract/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/PhoneNumber.java" data-lines="29-36"></code></pre>
+          <aside class="notes">A classe final implementa Cloneable e chama diretamente Object.clone. Por isso a ausência do marcador não pode ocorrer nesse caminho e a exceção verificada é convertida em AssertionError, preservando a causa.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: valor, tipo e construtor</div>
+          <span class="filename">contract/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/PhoneNumberTest.java" data-lines="14-24"></code></pre>
+          <aside class="notes">O clone é distinto, tem a mesma classe, equals e hashCode compatíveis. O contador mostra que o construtor não foi chamado novamente. Ele é instrumentação sequencial para a demonstração.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Herança</div><h2>Instanciar a classe base<br /><em>perde o subtipo</em></h2><div class="box">new Parent() continua sendo Parent,<br />mesmo quando o original é Child.</div><p class="sub">A cadeia de super.clone preserva a classe real.</p>
+          <aside class="notes">Parent é o papel da classe InheritanceExample neste exemplo. brokenClone demonstra a variante que instancia a base. A implementação correta encadeia super.clone até Object. A base mantém o método protegido sem implementar Cloneable; Child opta pelo marcador e amplia o retorno para público e covariante. Uma base também pode impedir clonagem com método protegido final que lança a exceção. Não imponha o marcador a novas hierarquias.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Duas estratégias na mesma classe base</div>
+          <span class="filename">inheritance/InheritanceExample.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/inheritance/InheritanceExample.java" data-lines="21-23"></code></pre>
+          <span class="filename">inheritance/InheritanceExample.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/inheritance/InheritanceExample.java" data-lines="25-28"></code></pre>
+          <aside class="notes">A primeira estratégia cria a classe base. A segunda usa a classe real do receptor no caminho de Object.clone. Cada nível deve reparar seus próprios campos mutáveis quando necessário.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: o clone continua sendo Child</div>
+          <span class="filename">inheritance/InheritanceExampleTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/inheritance/InheritanceExampleTest.java" data-lines="13-22"></code></pre>
+          <aside class="notes">O cast da cópia baseada em construtor falha. O clone correto preserva Child e seu estado. Tipo declarado de retorno e classe real do objeto são coisas diferentes.</aside>
+        </section>
+
+        <section class="figure">
+          <div class="kicker">Referências mutáveis</div><h2>Stack: outra pilha,<br /><em>o mesmo array?</em></h2><figure><img src="copy-structure.svg" alt="A cópia superficial compartilha o array. Copiar elements separa os arrays e preserva as referências aos elementos." /><figcaption>Copiar a pilha não separa automaticamente seu armazenamento.</figcaption></figure>
+          <aside class="notes">size é copiado, mas a referência elements continua levando ao mesmo array após super.clone. pop limpa a posição removida; no clone superficial isso também limpa um slot ainda usado pelo original. A correção é copiar o array. É independência da estrutura, não cópia profunda de todos os elementos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A falha e a correção do array interno</div>
+          <span class="filename">mutable/Stack.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/Stack.java" data-lines="28-34"></code></pre>
+          <span class="filename">mutable/Stack.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/Stack.java" data-lines="36-41"></code></pre>
+          <aside class="notes">shallowCopy é a variante deliberadamente incorreta. clone usa essa cópia inicial e substitui elements por outro array. pop continua limpando o slot para evitar referências obsoletas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: pop não pode corromper o original</div>
+          <span class="filename">mutable/StackTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/StackTest.java" data-lines="14-23"></code></pre>
+          <aside class="notes">O primeiro pop no original retorna null após a mutação da cópia superficial. Depois da correção, o original conserva top. A falha é determinística e não envolve concorrência.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Arrays</div><h2>Array novo.<br /><em>Os mesmos elementos.</em></h2><p class="lede">StringBuilder[] copia referências aos builders.</p><p class="sub">Para isolar seus estados, copie também cada elemento mutável.</p>
+          <aside class="notes">Arrays têm clone público, retorno do próprio tipo e nenhuma exceção verificada. Um int[] tem posições independentes; um array de referências mantém os objetos. Em int[][] apenas o array externo é novo. Copiar profundamente significa separar o estado mutável necessário segundo a política; valores imutáveis podem ser compartilhados. Grafos com ciclos ou referências repetidas exigem uma política adicional.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: copiar o array e copiar o elemento</div>
+          <span class="filename">mutable/StackTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/StackTest.java" data-lines="27-39"></code></pre>
+          <aside class="notes">A mutação pelo array clonado muda o original para AB. Criar outro StringBuilder isola a mudança seguinte: a cópia fica ABC e o original continua AB.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Estruturas encadeadas</div><h2>HashTable: buckets novos,<br /><em>nós compartilhados</em></h2><div class="box">Copiar o array de buckets não copia<br />os nós das suas cadeias.</div><p class="sub">A correção precisa reconstruir todos os nós.</p>
+          <aside class="notes">A estrutura tem um array de buckets e cadeias Entry. Aa e BB têm o mesmo hash e produzem uma colisão real. Copiar só buckets ainda compartilha os nós; atualizar a cauda pode mudar o original. A tabela foi reduzida a put e get para mostrar isso. As chaves e valores são strings imutáveis. Não é a implementação de java.util.Hashtable.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Uma cópia iterativa de cada cadeia</div>
+          <span class="filename">mutable/HashTable.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/HashTable.java" data-lines="17-25"></code></pre>
+          <span class="filename">mutable/HashTable.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/HashTable.java" data-lines="59-66"></code></pre>
+          <aside class="notes">O laço reconstrói os nós e o clone percorre todos os buckets. Recursão usaria uma chamada por nó e poderia causar StackOverflowError em cadeias longas; a iteração usa espaço auxiliar constante além dos nós novos. Uma reconstrução via inserção também é possível, mas não deve chamar métodos sobrescrevíveis durante a preparação do clone.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: alterações na cabeça e na cauda</div>
+          <span class="filename">mutable/HashTableTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/mutable/HashTableTest.java" data-lines="12-27"></code></pre>
+          <aside class="notes">A cópia só de buckets altera a cauda original. A cópia corrigida muda cabeça e cauda sem afetar os valores do original. Todos os resultados são determinísticos.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Cuidados na implementação</div><h2>Preserve as <em>invariantes</em></h2><div class="duo"><div class="col"><h3>Referências final</h3><p class="sub">final não torna a lista imutável.<br />clone não pode substituir esse campo.</p></div><div class="col"><h3>Exceção verificada</h3><p class="sub">Sem Cloneable, Object.clone lança<br />CloneNotSupportedException.</p></div></div>
+          <aside class="notes">Uma referência final para uma lista mutável continua compartilhada após cópia superficial e não pode ser reatribuída no clone. Não enfraqueça final automaticamente para acomodar clonagem. Um clone em preparação também não deve chamar métodos sobrescrevíveis: uma subclasse pode executar antes de reparar suas referências. Em classes thread-safe, a cópia deve respeitar o protocolo de sincronização das escritas; Object.clone não oferece sincronização nem snapshot atômico sozinho. Esses cuidados são explicados sem adicionar classes ou simular corridas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: restrições da linguagem e da API</div>
+          <span class="filename">contract/CloneableDemoTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemoTest.java" data-lines="58-60"></code></pre>
+          <span class="filename">contract/CloneableDemoTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/contract/CloneableDemoTest.java" data-lines="45-48"></code></pre>
+          <aside class="notes">O javac rejeita o fixture que tenta substituir uma referência final no método de cópia. A chamada real a Object.clone sem marcador lança a exceção verificada. A conversão para AssertionError em PhoneNumber depende das premissas daquela implementação; não é regra universal.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Alternativas</div><h2>Construa a cópia <em>explicitamente</em></h2><div class="duo"><div class="col"><h3>Copy constructor</h3><p class="sub">new Account(original)</p></div><div class="col"><h3>Copy factory</h3><p class="sub">Account.copyOf(original)</p></div></div><p class="sub">Construção normal, campos final e política de cópia definida pela classe.</p>
+          <aside class="notes">Account copia a lista pelo construtor e mantém o campo final. Strings imutáveis podem ser compartilhadas. Nenhuma técnica garante cópia profunda automaticamente. Construtores não preservam subtipos por polimorfismo; factories podem escolher outra representação. Imutáveis normalmente dispensam cópia. Como complemento de backend, diferencie snapshot de entidade, que pode preservar ID, de nova entidade, que exige política explícita de identidade e ciclo de vida. Não precisamos de outra entidade demonstrativa para isso.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Inicializar uma nova lista mantendo final</div>
+          <span class="filename">alternatives/Account.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/alternatives/Account.java" data-lines="7-19"></code></pre>
+          <aside class="notes">O construtor comum cria uma ArrayList. O construtor de cópia delega a ele, e a factory delega ao construtor de cópia. A política é independente para a lista e compartilhada para as strings.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: cada cópia possui sua própria lista</div>
+          <span class="filename">alternatives/AccountTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item13/alternatives/AccountTest.java" data-lines="14-25"></code></pre>
+          <aside class="notes">Adicionar um rótulo a uma cópia não altera o original nem a outra cópia. O teste também verifica que esta factory retorna outra instância; o nome copyOf sozinho não garante isso para toda API.</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Recapitulando</div><h2>Item 13</h2><ul><li>Cloneable não oferece uma operação pública</li><li>Object.clone faz uma cópia superficial</li><li>Copie o estado mutável que precisa de independência</li><li>Preserve as invariantes e a classe concreta</li><li>Prefira construtores e factories em novos modelos</li></ul>
+          <aside class="notes">Retome os exemplos: PhoneNumber basta copiar campos; Stack precisa de outro array; HashTable precisa de novos nós. Cloneable pode ser exigido por contratos existentes. Arrays são um caso adequado para clone. A recomendação não é uma proibição absoluta.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">A ideia central</div><h1>Defina a <em>cópia.</em></h1><p class="sub">O que deve ser preservado?<br />O que precisa ser independente?</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Item 13 · clone</span></div>
+          <aside class="notes">Encerre com a discussão: existe um caso concreto nos nossos projetos em que Cloneable seria melhor que um construtor de cópia? Peça que expliquem a política de identidade, estado e propriedade das referências.</aside>
+        </section>
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><b>PT</b> · <a href="en.html">EN</a></span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
+

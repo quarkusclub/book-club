@@ -1,0 +1,8 @@
+class CloneClient {
+    static class MarkerOnly implements Cloneable {
+    }
+
+    Object copy(MarkerOnly source) throws CloneNotSupportedException {
+        return source.clone();
+    }
+}
