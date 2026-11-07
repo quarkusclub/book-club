@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 14 - Considere implementar Comparable</title>
+    <meta name="description" content="Ordenação natural, o contrato de compareTo e um bug real de overflow, com código real e testes." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="../../../../assets/logo.png" type="image/png" sizes="145x145" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1><p class="title-sub">Item 14<br /><strong>Considere implementar Comparable</strong></p><p class="sub">Capítulo 3 · Métodos comuns a todos os objetos</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Book Club · Effective Java</span></div>
+          <aside class="notes">Abra com a pergunta: o que significa um objeto ter uma ordem natural? O item fecha o capítulo 3, mas compareTo não é um método de Object. Termine mostrando um bug real em um SDK open source.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">O caminho</div><h2>Ordenar é um <em>contrato</em></h2><ol><li>compareTo fora de Object</li><li>O contrato: reflexividade, simetria, transitividade</li><li>Tipos diferentes e ClassCastException</li><li>TreeSet e a consistência com equals</li><li>Contrato quebrado, busca binária quebrada</li><li>Herança, Liskov e composição</li><li>Vários campos, com e sem Comparator</li><li>Um caso real: sdk-java #1799</li></ol>
+          <aside class="notes">Cada conceito vem acompanhado do código real e do teste que prova o comportamento.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Onde vive compareTo</div><h2>Não está em <em>Object</em></h2><div class="duo"><div class="col"><h3>equals</h3><p class="sub">Declarado em Object.<br />Responde: são iguais?</p></div><div class="col"><h3>compareTo</h3><p class="sub">Declarado em Comparable.<br />Responde: quem vem antes?</p></div></div><p class="sub">Implementar Comparable declara que as instâncias têm uma <strong>ordenação natural</strong>.</p>
+          <aside class="notes">compareTo é o único método de Comparable. É parecido com equals, mas além de igualdade admite comparações de ordem, e é genérico: Comparable<T> compara apenas com T. Ordenação natural é a ordem que faz sentido por padrão para o tipo: alfabética, numérica, cronológica. String, Integer, BigDecimal e os tipos de java.time já a implementam.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: Object não declara compareTo</div>
+          <span class="filename">contract/NaturalOrderingTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/NaturalOrderingTest.java" data-lines="18-25"></code></pre>
+          <aside class="notes">A reflexão lista os métodos públicos de Object: equals está lá, compareTo não. A capacidade de ordenar vem de uma interface, opcional, que a classe escolhe implementar.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Por que implementar</div><h2>Um método,<br /><em>muitos algoritmos</em></h2><p class="lede">Collections.sort · binarySearch · max · TreeSet · TreeMap</p><p class="sub">Tudo que depende de Comparable passa a funcionar sem código extra.</p>
+          <aside class="notes">Algoritmos genéricos e coleções ordenadas dependem dessa interface. Com pouco esforço a classe ganha ordenação, busca, extremos e coleções ordenadas. Se a classe é um valor com ordem natural óbvia, implemente Comparable. Usamos o CaseInsensitiveString do livro: compara ignorando maiúsculas e minúsculas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Comparable&lt;T&gt; delega para um Comparator do JDK</div>
+          <span class="filename">contract/CaseInsensitiveString.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/CaseInsensitiveString.java" data-lines="5-5"></code></pre>
+          <span class="filename">contract/CaseInsensitiveString.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/CaseInsensitiveString.java" data-lines="11-14"></code></pre>
+          <aside class="notes">O parâmetro de tipo garante em tempo de compilação que só comparamos com outro CaseInsensitiveString. Não há cast nem checagem de tipo no corpo. equals e hashCode foram sobrescritos para ficarem consistentes com essa ordem.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: ordenar, buscar e escolher o maior</div>
+          <span class="filename">contract/NaturalOrderingTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/NaturalOrderingTest.java" data-lines="27-41"></code></pre>
+          <aside class="notes">sort, binarySearch e max funcionam diretamente, sem nenhum Comparator passado como argumento.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: sem ordem natural, sem TreeSet</div>
+          <span class="filename">contract/NaturalOrderingTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/NaturalOrderingTest.java" data-lines="43-50"></code></pre>
+          <aside class="notes">Um TreeSet recusa um Object sem ordem natural com ClassCastException já na primeira inserção: ele compara o elemento consigo mesmo para validar o tipo.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">O contrato geral</div><h2>Negativo, zero <em>ou positivo</em></h2><p class="lede">Reflexividade · x.compareTo(x) == 0</p><p class="lede">Simetria · sgn(x.compareTo(y)) == -sgn(y.compareTo(x))</p><p class="lede">Transitividade · x &gt; y &amp;&amp; y &gt; z ⇒ x &gt; z</p><p class="sub">Se x.compareTo(y) == 0, x e y se comparam igual com qualquer z.</p>
+          <aside class="notes">Compara este objeto com o especificado para determinar a ordem: retorna um inteiro negativo, zero ou positivo se este objeto for menor, igual ou maior. Só o sinal importa, não o valor. São as mesmas restrições do equals: reflexividade, simetria e transitividade. A simetria inclui exceções: x.compareTo(y) lança se e somente se y.compareTo(x) lança. Recomendação forte, mas não obrigatória: (x.compareTo(y) == 0) == x.equals(y).</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: reflexividade e simetria</div>
+          <span class="filename">contract/CompareToContractTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/CompareToContractTest.java" data-lines="20-36"></code></pre>
+          <aside class="notes">As amostras incluem Java e JAVA, que se comparam como iguais. Testamos todos os pares, não um caso escolhido a dedo.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: transitividade</div>
+          <span class="filename">contract/CompareToContractTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/CompareToContractTest.java" data-lines="38-53"></code></pre>
+          <aside class="notes">Todas as triplas. A segunda condição é a cláusula menos lembrada: valores que empatam devem se comportar igual contra qualquer terceiro.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Diferente do equals</div><h2>Tipos diferentes?<br /><em>Pode lançar exceção</em></h2><div class="box">equals deve responder false para outro tipo.<br />compareTo pode lançar ClassCastException.</div>
+          <aside class="notes">O contrato de equals vale para qualquer Object. compareTo não precisa funcionar entre tipos diferentes, e é exatamente isso que costuma acontecer. Com genéricos o compilador já impede a chamada; via tipo raw, o método bridge gerado faz o cast e lança ClassCastException.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: false contra exceção</div>
+          <span class="filename">contract/NaturalOrderingTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/contract/NaturalOrderingTest.java" data-lines="52-62"></code></pre>
+          <aside class="notes">equals com uma String retorna false. compareTo com a mesma String, pela referência raw, lança ClassCastException. Nenhuma linha no nosso compareTo trata o tipo: o cast vem do compilador.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Sinergia</div><h2>TreeSet usa compareTo,<br /><em>não equals</em></h2><div class="duo"><div class="col"><h3>Ordem</h3><p class="sub">Os elementos já saem ordenados.<br />Nenhuma chamada a sort.</p></div><div class="col"><h3>Unicidade</h3><p class="sub">compareTo == 0 é duplicata.<br />equals não é consultado.</p></div></div>
+          <aside class="notes">TreeSet e TreeMap usam compareTo para posicionar e para decidir duplicatas. As interfaces Set e Map são definidas em termos de equals. Se compareTo e equals discordam, a coleção ainda funciona, mas não obedece ao contrato geral da interface. O exemplo do livro é BigDecimal: 1.0 e 1.00 são diferentes para equals e iguais para compareTo.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Um glossário apoiado em TreeSet</div>
+          <span class="filename">collections/Glossary.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/collections/Glossary.java" data-lines="9-24"></code></pre>
+          <aside class="notes">A classe não ordena nada explicitamente. A ordem e a unicidade vêm do TreeSet, que delega para o compareTo de CaseInsensitiveString.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: ordenado e sem duplicatas</div>
+          <span class="filename">collections/GlossaryTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/collections/GlossaryTest.java" data-lines="16-36"></code></pre>
+          <aside class="notes">Os termos saem em ordem alfabética sem distinção de maiúsculas. JAVA é recusado porque compareTo com Java retorna zero.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: BigDecimal, HashSet e TreeSet</div>
+          <span class="filename">collections/GlossaryTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/collections/GlossaryTest.java" data-lines="38-45"></code></pre>
+          <aside class="notes">Os mesmos dois valores: HashSet guarda dois porque usa equals, TreeSet guarda um porque usa compareTo. Por isso a recomendação de manter compareTo consistente com equals, e de documentar quando não for.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">A mensagem importante</div><h2>Contrato quebrado,<br /><em>colaboradores quebrados</em></h2><div class="box">hashCode errado quebra HashMap e HashSet.<br />compareTo errado quebra TreeSet, sort e binarySearch.</div>
+          <aside class="notes">Assim como no Item 11, a classe defeituosa não falha sozinha: ela falha dentro de código do JDK que confia no contrato. Rank esqueceu o caso negativo: retorna 1 se maior e 0 caso contrário. Menor vira igual.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Rank viola a simetria</div>
+          <span class="filename">broken/Rank.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/broken/Rank.java" data-lines="3-9"></code></pre>
+          <span class="filename">broken/RankTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/broken/RankTest.java" data-lines="18-23"></code></pre>
+          <aside class="notes">Rank(1) comparado com Rank(2) dá zero; o inverso dá positivo. Os sinais deveriam ser opostos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: binarySearch encontra o elemento errado</div>
+          <span class="filename">broken/RankTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/broken/RankTest.java" data-lines="25-33"></code></pre>
+          <aside class="notes">A lista está corretamente ordenada. Collections.binarySearch procura 5, compara com o elemento do meio, 3, recebe zero e devolve o índice 2 como se tivesse encontrado. Com Integer, a mesma busca retorna 4.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: TreeSet perde um elemento</div>
+          <span class="filename">broken/RankTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/broken/RankTest.java" data-lines="35-43"></code></pre>
+          <aside class="notes">Rank(1) é tratado como duplicata de Rank(2) e desaparece sem erro nem aviso.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">A regra do Item 10</div><h2>Não há como estender<br /><em>e adicionar valor</em></h2><p class="lede">Point → ColorPoint</p><p class="sub">Não dá para estender uma classe instanciável com um novo componente de valor preservando o contrato do compareTo, a menos que se abra mão da abstração orientada a objetos.</p>
+          <aside class="notes">É a mesma limitação do equals. Detalhe de Java: ColorPoint extends Point nem pode declarar implements Comparable<ColorPoint>, porque Comparable não pode ser herdado com argumentos diferentes. A subclasse fica presa a compareTo(Point). Vamos ver duas tentativas e a saída.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Tentativa A: comparar cor só com ColorPoint</div>
+          <span class="filename">inheritance/Point.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/Point.java" data-lines="17-21"></code></pre>
+          <span class="filename">inheritance/ColorPointBrokenTransitivity.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointBrokenTransitivity.java" data-lines="19-26"></code></pre>
+          <aside class="notes">Point ordena por x e y. A subclasse acrescenta a cor como desempate apenas quando o outro lado também tem cor; contra um Point puro, compara só a posição.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a transitividade quebra</div>
+          <span class="filename">inheritance/ColorPointBrokenTransitivityTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointBrokenTransitivityTest.java" data-lines="19-32"></code></pre>
+          <aside class="notes">Vermelho empata com o ponto sem cor, que empata com o azul, mas vermelho e azul são diferentes. Consequência prática: os mesmos três pontos geram um TreeSet com dois ou com um elemento, dependendo só da ordem de inserção.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Tentativa B: getClass()</div><h2>Quebra o princípio<br />de <em>Liskov</em></h2><div class="box">Um ColorPoint deixa de funcionar<br />onde um Point é esperado.</div><p class="sub">Lançar ClassCastException é permitido; lançar só de um lado, não.</p>
+          <aside class="notes">Igual ao getClass do Item 10. ColorPoint recusa qualquer objeto que não seja exatamente da sua classe. O contrato permite a exceção para tipos diferentes, mas Point continua aceitando o ColorPoint. p.compareTo(cp) responde e cp.compareTo(p) lança: a simetria de exceções é violada. Pelo princípio de Liskov, qualquer propriedade importante de um tipo vale para seus subtipos; aqui, um método escrito para List<Point> falha quando recebe um subtipo.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Recusar tudo que não for a mesma classe</div>
+          <span class="filename">inheritance/ColorPointGetClass.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointGetClass.java" data-lines="20-28"></code></pre>
+          <aside class="notes">Dentro da própria classe a ordem é correta: posição e depois cor. O problema está na fronteira com a superclasse.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a mesma lista funciona ou explode</div>
+          <span class="filename">inheritance/ColorPointGetClassTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointGetClassTest.java" data-lines="19-33"></code></pre>
+          <aside class="notes">Collections.max foi escrito para List<Point>. Com o ColorPoint primeiro, quem compara é o Point e tudo funciona. Com o Point primeiro, quem compara é o ColorPoint, e a exceção aparece. O comportamento depende da ordem dos elementos, não dos valores.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">A saída</div><h2>Composição<br /><em>em vez de herança</em></h2><div class="duo"><div class="col"><h3>Tem um Point</h3><p class="sub">Não é subtipo.<br />Define sua própria ordem.</p></div><div class="col"><h3>View</h3><p class="sub">asPoint() devolve o Point<br />para quem precisa dele.</p></div></div>
+          <aside class="notes">Mesma recomendação do livro para equals: escreva uma classe não relacionada com um campo do tipo original e um método de view. Sem relação de subtipo, não há contrato da superclasse para defender.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Ordem natural própria com Comparator</div>
+          <span class="filename">inheritance/ColorPointComposition.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointComposition.java" data-lines="14-16"></code></pre>
+          <span class="filename">inheritance/ColorPointComposition.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointComposition.java" data-lines="26-33"></code></pre>
+          <aside class="notes">A ordem reaproveita a ordem natural de Point e acrescenta a cor como desempate. A view asPoint permite usar o objeto onde um Point é necessário.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: nenhum ponto se perde</div>
+          <span class="filename">inheritance/ColorPointCompositionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointCompositionTest.java" data-lines="15-25"></code></pre>
+          <aside class="notes">Três pontos distintos ficam três em qualquer ordem de inserção.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a view continua sendo um Point</div>
+          <span class="filename">inheritance/ColorPointCompositionTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/inheritance/ColorPointCompositionTest.java" data-lines="27-34"></code></pre>
+          <aside class="notes">Quem precisa de um Point usa asPoint e participa normalmente das ordenações de Point.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Vários campos</div><h2>Do campo mais<br /><em>significativo</em> ao menos</h2><p class="lede">areaCode → prefix → lineNum</p><p class="sub">Use Integer.compare, nunca &lt; e &gt; nem subtração.</p>
+          <aside class="notes">Compare o campo mais importante primeiro. Se o resultado não for zero, ele decide; senão, siga para o próximo. Desde o Java 7, os métodos estáticos compare das classes wrapper substituem os operadores relacionais, que o livro chama de verbosos e propensos a erro.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Sem Comparator: escrito à mão</div>
+          <span class="filename">multifield/PhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/multifield/PhoneNumber.java" data-lines="5-15"></code></pre>
+          <aside class="notes">É o PhoneNumber do livro. Cada nível só é consultado em caso de empate no anterior.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Com Comparator: construction methods</div>
+          <span class="filename">multifield/ComparatorPhoneNumber.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/multifield/ComparatorPhoneNumber.java" data-lines="10-18"></code></pre>
+          <aside class="notes">Java 8 trouxe comparingInt e thenComparingInt. A leitura vira uma frase: compare por área, depois prefixo, depois linha. O comparator é static final e construído uma vez. O livro menciona um custo de desempenho modesto; em troca, some o código de desempate.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: o campo mais significativo decide</div>
+          <span class="filename">multifield/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/multifield/PhoneNumberTest.java" data-lines="15-21"></code></pre>
+          <aside class="notes">O código de área domina mesmo quando os outros campos são maiores.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: as duas versões concordam</div>
+          <span class="filename">multifield/PhoneNumberTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/multifield/PhoneNumberTest.java" data-lines="34-41"></code></pre>
+          <aside class="notes">Ordenando a mesma entrada, a versão manual e a versão com Comparator produzem a mesma sequência.</aside>
+        </section>
+
+        <section class="gotcha">
+          <div class="kicker">Um caso real</div><h2>Subtração <em>transborda</em></h2><div class="box">return this.priority() - other.priority();</div><p class="sub"><a href="https://github.com/open-workflow-specification/sdk-java/pull/1799">open-workflow-specification/sdk-java #1799</a></p>
+          <aside class="notes">O livro mostra o comparator baseado na diferença de hashCode como exemplo do que não fazer: a subtração transborda o int e viola a transitividade. No SDK Java do Open Workflow, ServicePriority fazia exatamente isso, e ele decide qual implementação é escolhida via ServiceLoader em quase todos os pontos de extensão. Quem retornasse Integer.MIN_VALUE para sempre vencer perdia, sem nenhuma exceção. Issue 1797; corrigido no PR 1799.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Antes e depois do PR</div>
+          <span class="filename">realworld/SubtractionServicePriority.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/SubtractionServicePriority.java" data-lines="11-14"></code></pre>
+          <span class="filename">realworld/ServicePriority.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriority.java" data-lines="15-18"></code></pre>
+          <span class="filename">realworld/ServiceSelector.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServiceSelector.java" data-lines="15-17"></code></pre>
+          <aside class="notes">Uma linha de diferença. ServiceSelector reproduz WorkflowUtils.loadFirst sem o ServiceLoader: ordena pela ordem natural e pega o primeiro.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: o vencedor perde</div>
+          <span class="filename">realworld/ServicePriorityTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriorityTest.java" data-lines="20-28"></code></pre>
+          <aside class="notes">MIN_VALUE menos 1000 transborda e vira positivo, então o serviço padrão é escolhido nas duas ordens.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: a transitividade quebra</div>
+          <span class="filename">realworld/ServicePriorityTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriorityTest.java" data-lines="30-40"></code></pre>
+          <aside class="notes">MIN é menor que 0, 0 é menor que 1000, mas MIN é maior que 1000. É exatamente o defeito que o livro aponta no comparator por diferença de hashCode.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste: depois do PR, o vencedor vence</div>
+          <span class="filename">realworld/ServicePriorityTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriorityTest.java" data-lines="42-50"></code></pre>
+          <aside class="notes">Com Integer.compare, o serviço com MIN_VALUE é escolhido nas duas ordens.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A facilidade do Comparator</div>
+          <span class="filename">realworld/ServicePriority.java</span>
+          <pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriority.java" data-lines="9-9"></code></pre>
+          <span class="filename">realworld/ServicePriorityTest.java</span>
+          <pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter03/item14/realworld/ServicePriorityTest.java" data-lines="62-65"></code></pre>
+          <aside class="notes">Uma linha com comparingInt faz o mesmo sem escrever lógica de comparação nenhuma. O teste confirma que as duas ordens são idênticas, inclusive nos extremos MIN_VALUE e MAX_VALUE.</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Recapitulando</div><h2>Item 14</h2><ul><li>Comparable declara uma ordenação natural</li><li>Respeite reflexividade, simetria e transitividade</li><li>Prefira ser consistente com equals</li><li>Contrato quebrado quebra TreeSet, sort e binarySearch</li><li>Para estender com valor, use composição</li><li>Use Integer.compare ou Comparator, nunca subtração</li></ul>
+          <aside class="notes">Retome os exemplos: CaseInsensitiveString, Glossary, Rank, ColorPoint, PhoneNumber e ServicePriority.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">A ideia central</div><h1>Ordem é <em>contrato.</em></h1><p class="sub">Quem depende da sua ordem confia nela.<br />Sem exceções, sem avisos.</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Item 14 · Comparable</span></div>
+          <aside class="notes">Encerre com a discussão: onde nos nossos projetos existe um compareTo ou Comparator escrito com subtração? Vale uma busca por "- other." dentro de compareTo.</aside>
+        </section>
+
+      </div>
+    </div>
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><b>PT</b> · <a href="en.html">EN</a></span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
