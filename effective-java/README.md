@@ -14,12 +14,19 @@ Portuguese, with a Quarkus module and a bilingual reveal.js deck proving every c
 | 12 | Always override `toString` | [PT](chapter-03/item-12/slides/index.html) · [EN](chapter-03/item-12/slides/en.html) | [item-12](chapter-03/item-12/) |
 | 13 | Override `clone` judiciously | [PT](chapter-03/item-13/slides/index.html) · [EN](chapter-03/item-13/slides/en.html) | [item-13](chapter-03/item-13/) |
 
+### Chapter 4 - Classes and Interfaces
+
+| Item | Topic | Slides | Code |
+| --- | --- | --- | --- |
+| 15 | Minimize the accessibility of classes and members | [PT](chapter-04/item-15/slides/index.html) · [EN](chapter-04/item-15/slides/en.html) | [item-15](chapter-04/item-15/) |
+
 ## Building
 
 ```bash
 cd effective-java
 mvn clean test              # every session module in this book
 mvn -pl chapter-03/item-10 test
+mvn -pl chapter-04/item-15 test
 ```
 
 ## Adding a session to this book

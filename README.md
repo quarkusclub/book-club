@@ -14,10 +14,10 @@ ones that are video-based rather than code-based.
 
 | Book | Sessions so far | |
 | --- | --- | --- |
-| Effective Java | 4 (Chapter 3, Items 10–13) | [`effective-java/README.md`](effective-java/README.md) |
+| Effective Java | 6 (Chapter 3, Items 10–14; Chapter 4, Item 15) | [`effective-java/README.md`](effective-java/README.md) |
 
 Each book's own `README.md` has the full, chapter-grouped session table; this one stays a
-one-line-per-book index so it doesn't need editing every week. The live, filterable version is
+one-line-per-book summary. The live, filterable version is
 [`index.html`](index.html).
 
 ## Repository layout

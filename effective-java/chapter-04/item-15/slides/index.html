@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Effective Java - Item 15 - Acessibilidade mínima</title>
+    <meta name="description" content="Item 15: encapsulamento, níveis de acesso, arrays final e módulos Java, com exemplos e testes." />
+
+    <link rel="icon" href="../../../../assets/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:wght@600;700&family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css" />
+    <link rel="stylesheet" href="../../../../assets/deck.css" />
+    <script>
+      try {
+        var t = localStorage.getItem("qc-theme");
+        if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    </script>
+  </head>
+
+  <body>
+    <div class="reveal">
+      <div class="slides">
+
+        <section class="cover">
+          <div class="kicker">Quarkus Club Book Club</div><h1>Effective <em>Java</em></h1>
+<p class="title-sub">Item 15<br /><strong>Reduza ao mínimo a acessibilidade das classes e de seus membros</strong></p>
+<p class="sub">Capítulo 4 · Classes e interfaces</p>
+<div class="byline"><span>Matheus</span><span class="dot">/</span><span class="where">Quarkus Club</span></div>
+          <aside class="notes">Sessão de aproximadamente 30 minutos, com demonstração opcional ao vivo. Abra com a pergunta: o que fica mais difícil de mudar depois que um detalhe vira API pública? O recorte é o item 15 da terceira edição, sem antecipar toda a discussão de herança do item 19.</aside>
+        </section>
+
+        <section class="agenda">
+          <div class="kicker">O caminho</div><h2>Quanto menos exposto, <em>mais liberdade</em></h2><ol><li>Encapsulamento e invariantes</li><li>API pública e implementação escondida</li><li>Os quatro níveis de acesso</li><li>Constantes, arrays e cópias</li><li>Pacotes exportados com JPMS</li></ol>
+          <aside class="notes">O objetivo é poder desenvolver, testar e alterar componentes independentemente. Encapsulamento não acelera código automaticamente: ele permite otimizar a implementação sem exigir mudanças nos clientes. Reserve os últimos minutos para discutir as escolhas de uma API real.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">01</div><h2>Proteja as <em>invariantes</em></h2><p class="goal">A API define quais mudanças de estado são permitidas.</p>
+          <aside class="notes">A API define quais mudanças de estado são permitidas.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Antes de mostrar o código</div><h2>Quem pode escrever <em>−100</em>?</h2><p class="lede">Um estoque começa com dez ingressos. A reserva não pode ser negativa nem exceder a disponibilidade.</p><p class="sub">Um campo público permite ignorar completamente essa regra.</p>
+          <aside class="notes">Peça que a turma preveja o resultado do próximo teste. O problema não é só alguém escrever um valor inválido: a classe perde o controle sobre todas as atribuições feitas por clientes. Esta demonstração é sequencial; tornar o campo privado não garante thread safety.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A falha: representação pública</div><span class="filename">ExposedInventory.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/encapsulation/ExposedInventory.java"></code></pre>
+          <aside class="notes">Não há uma operação de domínio entre o cliente e o estado. Até uma validação no construtor seria insuficiente para impedir a próxima atribuição.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste demonstra a violação</div><span class="filename">InventoryTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/encapsulation/InventoryTest.java" data-lines="13-17"></code></pre>
+          <aside class="notes">Este teste passa porque prova que o exemplo ruim permite a corrupção. Verde aqui não significa que o design é bom.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A correção: operações controladas</div><span class="filename">Inventory.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/encapsulation/Inventory.java" data-lines="3-19"></code></pre>
+          <aside class="notes">O estado fica privado e reserve expressa a mudança válida. A disponibilidade continua consultável. A representação pode mudar sem alterar a assinatura do contrato. Não estamos oferecendo uma implementação concorrente.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste prova preservação do estado</div><span class="filename">InventoryTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/encapsulation/InventoryTest.java" data-lines="29-35"></code></pre>
+          <aside class="notes">A mesma instância recebe três tentativas inválidas e continua com dez ingressos. Mostre também validReservation durante a demonstração ao vivo para ver o caminho de sucesso.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">02</div><h2>Exporte o <em>contrato</em></h2><p class="goal">O cliente precisa do serviço, não de todos os tipos que o implementam.</p>
+          <aside class="notes">O cliente precisa do serviço, não de todos os tipos que o implementam.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Tipos de nível superior</div><h2>Público só quando <em>necessário</em></h2><div class="duo"><div class="col"><h3>API</h3><p><code>TicketOffice</code>: o cliente pede um ingresso.</p></div><div class="col"><h3>Implementação</h3><p><code>SeatFormatter</code>: acesso de pacote.<br /><code>Ticket</code>: classe aninhada privada.</p></div></div>
+          <aside class="notes">Uma classe normal de nível superior pode ser pública ou ter acesso de pacote; private e protected são opções para membros, incluindo tipos aninhados. Se um helper só serve a uma classe, considere aninhá-lo como static private. Os nomes internos não entram no tipo de retorno público.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Uma fachada, um tipo privado</div><span class="filename">TicketOffice.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/facade/TicketOffice.java" data-lines="3-20"></code></pre>
+          <aside class="notes">Mostre issue e a classe Ticket. A implementação privada usa campos e validação próprios, mas o cliente recebe uma String. Acesso privado é permitido dentro do mesmo tipo de nível superior e seus tipos aninhados.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste usa somente o contrato</div><span class="filename">TicketOfficeTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/facade/TicketOfficeTest.java" data-lines="13-15"></code></pre>
+          <aside class="notes">Não usamos reflexão para alcançar Ticket. O teste verifica o resultado que importa ao cliente e continua válido se a implementação privada for substituída.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O pacote também é uma fronteira</div><span class="filename">SeatFormatter.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/facade/SeatFormatter.java"></code></pre>
+          <aside class="notes">Este helper deliberadamente demonstra acesso de pacote. Como só a fachada o utiliza hoje, ele também poderia ser aninhado. O exemplo mantém as duas alternativas visíveis para discussão.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Teste no mesmo pacote, sem API extra</div><span class="filename">TicketOfficeTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/facade/TicketOfficeTest.java" data-lines="19-21"></code></pre>
+          <aside class="notes">Não é necessário tornar o helper público para testá-lo. A localização de src/test não muda a regra: é a declaração package que determina o acesso.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O compilador rejeita o cliente externo</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="27-35"></code></pre>
+          <aside class="notes">A chamada a Compilation.source usa o compilador do JDK. A falha é a conclusão esperada; verificamos também o código do diagnóstico para evitar aceitar uma falha por outro motivo. O helper completo aparece em compiler/Compilation.java.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">03</div><h2>Escolha o menor <em>acesso útil</em></h2><p class="goal">Comece com private. Amplie apenas para atender um consumidor legítimo.</p>
+          <aside class="notes">Comece com private. Amplie apenas para atender um consumidor legítimo.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Membros de classes</div><h2>Quatro níveis, <em>compromissos diferentes</em></h2><ul><li><code>private</code> · dentro do tipo de nível superior e seus tipos aninhados</li><li>Sem modificador · mesmo pacote</li><li><code>protected</code> · mesmo pacote + subclasses, com restrições</li><li><code>public</code> · clientes com acesso ao tipo e ao pacote</li></ul>
+          <aside class="notes">Acessibilidade depende também do tipo que contém o membro e, em módulos nomeados, da leitura do módulo e da exportação do pacote. protected não significa apenas subclasses: classes comuns no mesmo pacote também podem acessá-lo. Os próximos testes verificam os casos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Quatro métodos para experimentar</div><span class="filename">AccessRules.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/access/AccessRules.java"></code></pre>
+          <aside class="notes">Esta classe existe apenas para a demonstração de regras da linguagem. Não é uma recomendação de criar quatro operações equivalentes numa API de produção.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Mesmo pacote: protected também funciona</div><span class="filename">AccessRulesTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/access/AccessRulesTest.java" data-lines="12-17"></code></pre>
+          <aside class="notes">A classe de teste não é subclasse de AccessRules. Mesmo assim ela pode acessar packageCode e protectedCode, pois pertence ao mesmo pacote.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Private continua privado no mesmo pacote</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="39-46"></code></pre>
+          <aside class="notes">A classe Client declara o mesmo pacote, mas é outro tipo de nível superior. privateCode continua inacessível. Isso contrasta com o acesso de pacote do slide anterior.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Subpacotes não ganham acesso de pacote</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="50-58"></code></pre>
+          <aside class="notes">O ponto no nome do pacote organiza nomes; não cria uma relação de acesso de pai e filho. access.client é um pacote diferente de access.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Protected fora do pacote</div><h2>A referência <em>também importa</em></h2><p class="lede">Uma subclasse externa pode acessar o membro de instância por <code>this</code> ou por uma referência do seu tipo, ou de um subtipo.</p><p class="sub">Uma referência tipada como a superclasse não recebe essa permissão.</p>
+          <aside class="notes">É uma restrição do acesso protected a membros de instância fora do pacote, não uma regra geral sobre qualquer membro protected. O acesso precisa ocorrer no corpo da subclasse. Para um tipo público exportado, protected também é um compromisso de API com subclasses externas.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Referência Child: aceito</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="74-83"></code></pre>
+          <aside class="notes">Peça uma previsão antes de mostrar successful true. O receptor other tem tipo Child, a própria subclasse onde o acesso ocorre.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Referência AccessRules: rejeitado</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="87-97"></code></pre>
+          <aside class="notes">A única diferença relevante é o tipo declarado do parâmetro. Mesmo estando numa subclasse, não podemos invocar esse método protegido em qualquer objeto da classe base.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Cliente sem herança: rejeitado</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="62-70"></code></pre>
+          <aside class="notes">Feche o quadro de protected: acesso de pacote funciona; subclasse externa exige as restrições vistas; cliente externo sem herança é rejeitado.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Limite à redução</div><h2>A sobrescrita preserva <em>o acesso</em></h2><p class="lede">Um método público herdado continua público na sobrescrita.</p><p class="sub">Um método público de interface também exige implementação pública.</p>
+          <aside class="notes">A regra evita que um subtipo retire uma operação disponível no contrato da base. Ela é um limite à recomendação de usar o menor acesso possível: a API herdada já impõe o mínimo.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Public para protected: não compila</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="101-111"></code></pre>
+          <aside class="notes">O compilador rejeita uma sobrescrita que enfraquece o acesso. O diagnóstico específico distingue esse caso de um erro de sintaxe ou classe ausente.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Implementação de interface sem public: rejeitada</div><span class="filename">AccessCompilationTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/compiler/AccessCompilationTest.java" data-lines="115-123"></code></pre>
+          <aside class="notes">O método de Job é público implicitamente. A implementação de Worker sem modificador tem acesso de pacote e não satisfaz esse contrato. publicImplementation, no mesmo arquivo, testa a versão pública aceita.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">04</div><h2>Final não é <em>imutável</em></h2><p class="goal">Proteger a referência não protege automaticamente o objeto referenciado.</p>
+          <aside class="notes">Proteger a referência não protege automaticamente o objeto referenciado.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Antes de executar</div><h2>O cliente troca <em>pdf por exe</em>?</h2><p class="lede">Um array público <code>static final</code> ainda permite alterar seus elementos.</p><p class="sub">Um getter que devolve o array interno produz o mesmo vazamento.</p>
+          <aside class="notes">A lista de formatos é um exemplo de configuração exposta a consumidores. final impede reatribuir a referência; não impede substituir uma posição. Um array não vazio é mutável mesmo quando seus elementos são String.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">As duas formas do vazamento</div><span class="filename">UnsafeFormats.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/arrays/UnsafeFormats.java"></code></pre>
+          <aside class="notes">A variável pública e o getter devolvem exatamente o mesmo armazenamento. Destacar que apenas trocar o campo para private, mantendo esse getter, não resolveria o problema.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste modifica a configuração global</div><span class="filename">FormatsTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/arrays/FormatsTest.java" data-lines="13-22"></code></pre>
+          <aside class="notes">O teste restaura o elemento no finally para não contaminar os demais testes. A restauração é limpeza da demonstração, não uma solução do design.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Duas saídas: lista ou cópia</div><span class="filename">SafeFormats.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/arrays/SafeFormats.java"></code></pre>
+          <aside class="notes">List.of oferece lista não modificável com elementos String imutáveis. O array permanece privado e cada chamada devolve um clone. Escolha a forma de retorno conforme o uso do cliente; clones de arrays de objetos continuam rasos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A cópia pode mudar; o original, não</div><span class="filename">FormatsTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/arrays/FormatsTest.java" data-lines="26-31"></code></pre>
+          <aside class="notes">O teste modifica a cópia e consulta a API de novo. A diferença entre os dois resultados mostra que o estado interno permaneceu preservado.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A lista rejeita a modificação</div><span class="filename">FormatsTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/arrays/FormatsTest.java" data-lines="35-39"></code></pre>
+          <aside class="notes">Uma constante pública pode ser adequada quando integra a abstração e contém valor primitivo ou objeto imutável. A garantia desta lista depende também de seus elementos serem imutáveis.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Uma distinção útil</div><h2>Visão ou <em>fotografia</em>?</h2><div class="duo"><div class="col"><h3>Visão não modificável</h3><p>Não permite escrita pelo cliente, mas acompanha mudanças internas.</p></div><div class="col"><h3>Cópia não modificável</h3><p>Preserva os elementos observados na captura.</p></div></div>
+          <aside class="notes">Esta extensão prática ajuda a escolher o contrato dos getters. Nem uma cópia de lista nem um wrapper torna objetos mutáveis contidos nela imutáveis. Aqui String permite separar o problema da estrutura do problema dos elementos.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A API explicita a semântica</div><span class="filename">FormatCatalog.java</span><pre><code class="language-java" data-src="../src/main/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/views/FormatCatalog.java" data-lines="7-21"></code></pre>
+          <aside class="notes">view acompanha o catálogo; snapshot registra um estado. Ambos bloqueiam alteração da lista pelo consumidor. O catálogo em si é mutável e este exemplo não oferece sincronização.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste mostra o efeito da próxima alteração</div><span class="filename">FormatCatalogTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/views/FormatCatalogTest.java" data-lines="13-20"></code></pre>
+          <aside class="notes">As duas listas são obtidas antes de registrar epub. Só a visão passa a mostrar o novo formato. Não chame uma visão dinâmica de valor imutável.</aside>
+        </section>
+
+        <section class="step">
+          <div class="num">05</div><h2>Uma fronteira a mais: <em>JPMS</em></h2><p class="goal">Um tipo público pode pertencer a um pacote não exportado.</p>
+          <aside class="notes">Um tipo público pode pertencer a um pacote não exportado.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Maven ≠ JPMS</div><h2>Public não elimina <em>exports</em></h2><ul><li>O módulo Maven organiza o build desta sessão.</li><li><code>module-info.java</code> declara um módulo Java nomeado.</li><li><code>requires</code> estabelece leitura; <code>exports</code> expõe um pacote.</li><li>Os testes usam dois módulos mínimos separados da aplicação Quarkus.</li></ul>
+          <aside class="notes">Atualize a perspectiva histórica da terceira edição: não repetimos uma recomendação geral de evitar módulos. Mostramos uma propriedade verificável no Java 25. exports regula acesso normal; opens trata reflexão profunda e não equivale a exports. Flags de override ficam fora desta demonstração.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">A biblioteca exporta somente a API</div><span class="filename">module-info.java</span><pre><code class="language-java" data-src="../src/test/resources/modules/club.tickets/module-info.java"></code></pre>
+          <aside class="notes">O pacote club.tickets.internal não aparece na declaração. Seus tipos públicos continuam utilizáveis dentro do próprio módulo, mas não por um cliente externo via acesso Java normal no module path.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste aceita o cliente da API</div><span class="filename">ModuleBoundaryTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/modules/ModuleBoundaryTest.java" data-lines="19-24"></code></pre>
+          <aside class="notes">As fixtures contêm o módulo club.client, que declara requires club.tickets e importa TicketOffice da API exportada. copySources copia as fixtures para o diretório temporário do teste e o compilador recebe module-source-path.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">Public dentro de um pacote não exportado</div><span class="filename">SeatAllocator.java</span><pre><code class="language-java" data-src="../src/test/resources/modules/club.tickets/club/tickets/internal/SeatAllocator.java"></code></pre>
+          <aside class="notes">A classe é public deliberadamente. A barreira que vamos verificar é a exportação do pacote, não o modificador da classe.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">O teste rejeita a implementação interna</div><span class="filename">ModuleBoundaryTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/modules/ModuleBoundaryTest.java" data-lines="28-35"></code></pre>
+          <aside class="notes">useInternalType troca o cliente para importar SeatAllocator. O erro package.not.visible confirma que o pacote não está disponível ao consumidor nomeado.</aside>
+        </section>
+
+        <section class="code small">
+          <div class="kicker">No classpath, sem descritores: acesso aceito</div><span class="filename">ModuleBoundaryTest.java</span><pre><code class="language-java" data-src="../src/test/java/club/quarkusclub/bookclub/effectivejava/chapter04/item15/modules/ModuleBoundaryTest.java" data-lines="39-46"></code></pre>
+          <aside class="notes">Este controle remove module-info.java e compila os mesmos tipos como código comum de classpath. Não estamos executando a aplicação Quarkus como um módulo JPMS, nem provando isolamento contra flags de abertura.</aside>
+        </section>
+
+        <section class="checkpoint">
+          <div class="kicker">Aplicação em revisão de código</div><h2>Antes de ampliar <em>o acesso</em></h2><ul><li>Existe um consumidor legítimo para este membro?</li><li>Um teste no mesmo pacote seria suficiente?</li><li>O getter deixa escapar estado mutável?</li><li>Uma subclasse externa pode passar a depender deste detalhe?</li><li>Consigo mudar a representação sem mudar o contrato?</li></ul>
+          <aside class="notes">Reúna o que os testes mostraram: acesso mínimo protege invariantes e mantém opções de evolução. Serializable pode tornar parte do estado privado um compromisso de compatibilidade da forma serializada; isso é uma conexão com itens posteriores, não uma demonstração incluída aqui.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Exercício de dois minutos</div><h2>Revise uma <em>API real</em></h2><p class="lede">Escolha um campo público, um helper público ou um getter de coleção de um projeto seu.</p><ol><li>Quem precisa acessá-lo?</li><li>Que invariante pode ser violada?</li><li>Qual é o menor contrato que atende o cliente?</li></ol>
+          <aside class="notes">Espere respostas antes de sugerir soluções. Volte a Inventory, TicketOffice e SafeFormats como três opções concretas. Se a API já foi publicada, reduzir acesso pode quebrar clientes; discuta migração em vez de aplicar uma mudança incompatível automaticamente.</aside>
+        </section>
+
+        <section class="cmd">
+          <div class="kicker">Demonstração ao vivo</div><h2>Execute os <em>26 testes</em></h2><div class="line">cd effective-java</div><div class="line">mvn -pl chapter-04/item-15 test</div><p class="note">JDK 25 · JUnit 5 · AssertJ · JavaCompiler</p>
+          <aside class="notes">Comece na raiz do repositório com JDK 25 ativo. Testes Java comuns não precisam iniciar o Quarkus. Os casos negativos produzem diagnósticos capturados dentro dos testes e a suíte deve terminar verde. O README do módulo tem o roteiro por grupo.</aside>
+        </section>
+
+        <section>
+          <div class="kicker">Para consultar depois</div><h2>Fonte e <em>verificação</em></h2><ul><li>Joshua Bloch · <em>Effective Java</em>, 3ª edição, item 15.</li><li><a href="https://docs.oracle.com/javase/specs/jls/se25/html/jls-6.html#jls-6.6">JLS 25 §6.6 · controle de acesso e protected</a></li><li><a href="https://docs.oracle.com/javase/specs/jls/se25/html/jls-8.html#jls-8.4.8.3">JLS 25 §8.4.8.3 · sobrescrita e acesso</a></li><li><a href="https://docs.oracle.com/javase/specs/jls/se25/html/jls-7.html#jls-7.7.2">JLS 25 §7.7.2 · exports e opens</a></li><li><a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.compiler/javax/tools/JavaCompiler.html">JavaCompiler · testes de compilação</a></li></ul>
+          <aside class="notes">Os exemplos foram escritos para esta sessão e não reproduzem os exemplos do livro. As regras da linguagem foram conferidas na especificação Java 25 e executadas nos testes. As notas distinguem recomendações de design das propriedades demonstradas.</aside>
+        </section>
+
+        <section class="answer">
+          <div class="kicker">Item 15</div><h1>Perguntas?</h1><p class="sub">Exponha o necessário.<br />Preserve a liberdade de mudar.</p><div class="byline"><span>Quarkus Club</span><span class="dot">/</span><span class="where">Próximo: item 16 · campos públicos</span></div>
+          <aside class="notes">Feche retomando a pergunta inicial: qual detalhe agora pode mudar sem afetar clientes? A próxima sessão aprofunda o desenho de classes públicas e o acesso por métodos no lugar de campos.</aside>
+        </section>
+
+      </div>
+    </div>
+
+    <div class="deck-footer">
+      <span id="stepIndicator" class="step-indicator"></span>
+      <span class="lang"><b>PT</b> · <a href="en.html">EN</a></span>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+    <script src="../../../../assets/deck.js"></script>
+    <script>initDeck();</script>
+  </body>
+</html>
